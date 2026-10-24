@@ -1,0 +1,6 @@
+{
+  "name": "StatSkillAI",
+  "description": "AI-powered competency and career development platform for students, government employees, and professionals.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

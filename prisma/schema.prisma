@@ -1,0 +1,283 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String   @default("learner") // learner, mentor, admin
+  profileType  String?  // Student, Government Employee, Private-Sector Professional
+  department   String?
+  designation  String?
+  avatar       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  profile         LearnerProfile?
+  attempts        AssessmentAttempt[]
+  gapAnalysis     GapAnalysis?
+  learningPath    LearningPath?
+  applications    Application[]
+  mentorProfile   Mentor?
+  sentMessages    DirectMessage[]     @relation("UserSentMessages")
+  quizzes         QuizRecord[]
+  settings        AppSettings?
+
+  @@index([email])
+  @@index([role])
+}
+
+model LearnerProfile {
+  id                        String   @id @default(uuid())
+  userId                    String   @unique
+  user                      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName                  String
+  profileType               String
+  highestEducation          String   @default("")
+  qualifications            String   @default("")
+  currentRoleOrCourse       String   @default("")
+  yearsOfExperience         Int      @default(0)
+  organisationOrInstitution String   @default("")
+  skills                    String   @default("[]") // JSON string array
+  interests                 String   @default("[]") // JSON string array
+  previousTrainings         String   @default("[]") // JSON array of PreviousTraining
+  careerGoal                String   @default("")
+  targetDomainScores        String   @default("{\"Technical\":70,\"Statistical\":70,\"Digital\":70,\"Behavioural\":70}") // JSON
+  completeness              Int      @default(0)
+  updatedAt                 DateTime @updatedAt
+}
+
+model AssessmentAttempt {
+  id           String   @id @default(uuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain       String   // Technical, Statistical, Digital, Behavioural
+  date         DateTime @default(now())
+  questions    String   @default("[]") // JSON QuestionRecord[]
+  userAnswers  String   @default("[]") // JSON number[]
+  score        Int      @default(0)
+  earnedWeight Int      @default(0)
+  maxWeight    Int      @default(0)
+  previousScore Int?
+  completed    Boolean  @default(true)
+
+  @@index([userId, domain])
+}
+
+model QuestionRecord {
+  id          String   @id @default(uuid())
+  domain      String   // Technical, Statistical, Digital, Behavioural
+  difficulty  String   // Easy, Medium, Hard
+  question    String
+  options     String   // JSON string array [4]
+  correctIndex Int
+  explanation String
+  skillTag    String
+  isVerified  Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  @@index([domain, difficulty])
+}
+
+model GapAnalysis {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  timestamp     DateTime @default(now())
+  strengths     String   @default("[]") // JSON string[]
+  gaps          String   @default("[]") // JSON SkillGapItem[]
+  summary       String   @default("")
+  priorityOrder String   @default("[]") // JSON string[]
+  domainScores  String   @default("{\"Technical\":0,\"Statistical\":0,\"Digital\":0,\"Behavioural\":0}") // JSON
+  targetScores  String   @default("{\"Technical\":70,\"Statistical\":70,\"Digital\":70,\"Behavioural\":70}") // JSON
+  overallScore  Int      @default(0)
+  updatedAt     DateTime @updatedAt
+}
+
+model Course {
+  id            String   @id @default(uuid())
+  title         String
+  domain        String   // Technical, Statistical, Digital, Behavioural
+  provider      String
+  source        String   // SWAYAM, NPTEL, iGOT Karmayogi, NCS, Company Training
+  duration      String
+  level         String   // Beginner, Intermediate, Advanced
+  description   String
+  portalUrl     String
+  skillsCovered String   @default("[]") // JSON string[]
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([domain])
+  @@index([source])
+}
+
+model LearningPath {
+  id              String         @id @default(uuid())
+  userId          String         @unique
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title           String
+  careerGoal      String         @default("")
+  progressPercent Int            @default(0)
+  isCompleted     Boolean        @default(false)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  steps           LearningStep[]
+}
+
+model LearningStep {
+  id                  String       @id @default(uuid())
+  learningPathId      String
+  learningPath        LearningPath @relation(fields: [learningPathId], references: [id], onDelete: Cascade)
+  title               String
+  domain              String       // Technical, Statistical, Digital, Behavioural
+  type                String       // Course, Training Programme, Reading, Practice
+  estimatedDuration   String
+  source              String
+  rationale           String
+  status              String       @default("Not started") // Not started, In progress, Completed
+  isAiSuggested       Boolean      @default(false)
+  isMentorRecommended Boolean      @default(false)
+  courseId            String?
+  orderIndex          Int          @default(0)
+
+  @@index([learningPathId])
+}
+
+model Opportunity {
+  id              String        @id @default(uuid())
+  title           String
+  organisation    String
+  orgId           String
+  sector          String
+  location        String
+  type            String        // Job, Internship, Apprenticeship, Training Programme
+  requiredSkills  String        @default("[]") // JSON string[]
+  minDomainLevels String        @default("{\"Technical\":50,\"Statistical\":50,\"Digital\":50,\"Behavioural\":50}") // JSON
+  description     String
+  deadline        String
+  stipendOrSalary String?
+  createdAt       DateTime      @default(now())
+  applications    Application[]
+
+  @@index([type])
+  @@index([sector])
+}
+
+model Application {
+  id               String      @id @default(uuid())
+  opportunityId    String
+  opportunity      Opportunity @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  opportunityTitle String
+  organisation     String
+  userId           String
+  user             User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userName         String
+  userEmail        String
+  appliedAt        DateTime    @default(now())
+  status           String      @default("Submitted") // Submitted, Under review, Shortlisted, Closed
+  matchPercentage  Int         @default(50)
+  notes            String?
+
+  @@index([userId])
+  @@index([opportunityId])
+}
+
+model Mentor {
+  id              String       @id @default(uuid())
+  userId          String       @unique
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  title           String
+  organisation    String
+  field           String
+  experienceYears Int          @default(0)
+  languages       String       @default("[\"English\"]") // JSON string[]
+  bio             String       @default("")
+  isVerified      Boolean      @default(false)
+  verifiedDate    String?
+  availability    String       @default("Flexible")
+  rating          Float        @default(5.0)
+  totalReviews    Int          @default(0)
+  mentorships     Mentorship[]
+
+  @@index([userId])
+}
+
+model Mentorship {
+  id                 String          @id @default(uuid())
+  mentorId           String
+  mentor             Mentor          @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  mentorName         String
+  mentorUserId       String
+  learnerId          String
+  learnerName        String
+  learnerProfileType String
+  goalMessage        String
+  status             String          @default("Pending") // Pending, Accepted, Declined, Completed
+  requestedAt        DateTime        @default(now())
+  meetingSchedule    String?
+  feedbackNotes      String          @default("[]") // JSON string[]
+  rating             Int?
+  ratingComment      String?
+  messages           DirectMessage[]
+
+  @@index([mentorUserId])
+  @@index([learnerId])
+}
+
+model DirectMessage {
+  id           String     @id @default(uuid())
+  mentorshipId String
+  mentorship   Mentorship @relation(fields: [mentorshipId], references: [id], onDelete: Cascade)
+  senderId     String
+  sender       User       @relation("UserSentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  senderName   String
+  senderRole   String     // learner, mentor, admin
+  text         String
+  timestamp    DateTime   @default(now())
+  isRead       Boolean    @default(false)
+
+  @@index([mentorshipId])
+}
+
+model QuizRecord {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title          String
+  sourceType     String   // pdf, text
+  sourceSnippet  String   @default("")
+  timestamp      DateTime @default(now())
+  difficulty     String   // Easy, Medium, Hard, Mixed
+  questions      String   @default("[]") // JSON QuestionRecord[]
+  userAnswers    String   @default("[]") // JSON number[]
+  score          Int      @default(0)
+  totalQuestions Int      @default(5)
+
+  @@index([userId])
+}
+
+model Organisation {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  sector      String
+  description String
+  createdAt   DateTime @default(now())
+}
+
+model AppSettings {
+  id           String  @id @default(uuid())
+  userId       String  @unique
+  user         User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  language     String  @default("en")
+  highContrast Boolean @default(false)
+  fontSize     String  @default("default")
+}
