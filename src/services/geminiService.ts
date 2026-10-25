@@ -13,6 +13,8 @@ import { AIPrompts } from './aiPrompts';
 import { FallbackService } from './aiFallbacks';
 import { Type } from '@google/genai';
 
+import { API_BASE_URL, ApiService } from './apiService';
+
 interface ApiGenerateResponse {
   success?: boolean;
   text?: string;
@@ -28,9 +30,13 @@ async function callServerGenerate(payload: {
   inlineData?: { mimeType: string; data: string };
 }): Promise<string | null> {
   try {
-    const res = await fetch('/api/gemini/generate', {
+    const token = ApiService.getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/api/gemini/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -55,9 +61,13 @@ async function callServerChat(payload: {
   systemInstruction?: string;
 }): Promise<string | null> {
   try {
-    const res = await fetch('/api/gemini/chat', {
+    const token = ApiService.getToken();
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(`${API_BASE_URL}/api/gemini/chat`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
 

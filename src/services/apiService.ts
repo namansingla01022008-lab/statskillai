@@ -22,7 +22,7 @@ const TOKEN_KEY = 'statskill_jwt_token';
 // Backend API base URL — uses env var at build time, falls back to Render deployment.
 // Automatically strips any trailing slashes or duplicate '/api' to prevent '/api/api' 404 bugs.
 const RAW_URL = (import.meta.env.VITE_API_BASE_URL || 'https://statskillai-1ffb.onrender.com').trim();
-const API_BASE_URL = RAW_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
+export const API_BASE_URL = RAW_URL.replace(/\/api\/?$/, '').replace(/\/+$/, '');
 
 let socketInstance: Socket | null = null;
 

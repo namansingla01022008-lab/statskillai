@@ -50,7 +50,10 @@ const generalApiLimiter = rateLimit({
 async function startServer() {
   const app = express();
   const httpServer = http.createServer(app);
-  const PORT = parseInt(process.env.PORT || '3000', 10);
+  const PORT = Number(process.env.PORT) || 3000;
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 
   // Initialize Socket.io on the HTTP server
   initSocketIO(httpServer);
