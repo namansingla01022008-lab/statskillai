@@ -70,8 +70,9 @@ npx prisma migrate deploy
 - After the backend is live (e.g., `https://statskillai.onrender.com`), you need to tell the frontend where to call the API.
 - In Vercel, go to **Project Settings → Environment Variables** and add:
   - **Key**: `VITE_API_BASE_URL`
-  - **Value**: `https://statskillai.onrender.com/api`
+  - **Value**: `https://statskillai-1ffb.onrender.com` (without trailing `/api`)
   - **Environment**: `Production` (and optionally `Preview`/`Development`).
+  *(Note: The client now automatically cleans up any trailing `/api` or `/`, preventing `/api/api` 404 errors).*
 
 ### 2.2 Deploy the React Vite app
 1. In Vercel dashboard, click **New Project** → **Import Git Repository**.
