@@ -19,6 +19,9 @@ import {
 
 const TOKEN_KEY = 'statskill_jwt_token';
 
+// Backend API base URL — uses env var at build time, falls back to Render deployment
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://statskillai-1ffb.onrender.com';
+
 let socketInstance: Socket | null = null;
 
 export const ApiService = {
@@ -52,7 +55,8 @@ export const ApiService = {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(endpoint, {
+    const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+    const res = await fetch(url, {
       ...options,
       headers,
     });
@@ -73,7 +77,7 @@ export const ApiService = {
   getSocket(): Socket {
     if (!socketInstance) {
       const token = this.getToken();
-      socketInstance = io(window.location.origin, {
+      socketInstance = io(API_BASE_URL, {
         auth: { token },
         transports: ['websocket', 'polling'],
       });
@@ -86,7 +90,7 @@ export const ApiService = {
       socketInstance.disconnect();
     }
     const token = this.getToken();
-    socketInstance = io(window.location.origin, {
+    socketInstance = io(API_BASE_URL, {
       auth: { token },
       transports: ['websocket', 'polling'],
     });
