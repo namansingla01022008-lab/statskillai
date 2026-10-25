@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "vite build",
-    "start": "node server.ts",
+    "build": "prisma generate && prisma db push --accept-data-loss && vite build",
+    "start": "prisma db push --accept-data-loss && tsx prisma/seed.ts && tsx server.ts",
+    "postinstall": "prisma generate",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -39,6 +40,7 @@
     "recharts": "^3.10.1",
     "socket.io": "^4.8.4",
     "socket.io-client": "^4.8.4",
+    "tsx": "^4.23.15",
     "vite": "^8.3.0"
   },
   "devDependencies": {
@@ -52,7 +54,6 @@
     "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.21",
     "tailwindcss": "^4.3.3",
-    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

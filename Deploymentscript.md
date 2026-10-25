@@ -57,10 +57,19 @@ This guide walks you through deploying the **StatSkillAI** application as a full
 
 Render will build the Docker image, run migrations (`npx prisma migrate deploy`) and start the server. The service URL will look like `https://statskillai.onrender.com`.
 
-### 1.5 Run Prisma migrations (if not auto‑executed)
-If Render does not automatically run migrations, add a **post‑deploy script** in Render settings:
+### 1.5 Database Schema & Seeding (Automated)
+`package.json` is configured to automatically run `prisma db push` and `prisma/seed.ts` during Render's build and startup steps.
+If you ever want to push or seed manually from your local machine using your cloud database URL:
 ```bash
-npx prisma migrate deploy
+# In your local terminal:
+$env:DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DBNAME?sslmode=require"
+npx prisma db push
+npx tsx prisma/seed.ts
+```
+Or in the Render Dashboard **Shell** tab:
+```bash
+npx prisma db push
+npx tsx prisma/seed.ts
 ```
 
 ---
