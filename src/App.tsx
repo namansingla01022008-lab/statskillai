@@ -34,6 +34,7 @@ import { MenteeDetailPage } from './pages/mentor/MenteeDetailPage';
 // Admin Pages
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
 import { AdminRewardsPage } from './pages/admin/AdminRewardsPage';
+import { AdminCertificatesPage } from './pages/admin/AdminCertificatesPage';
 import { AdminCatalogPage } from './pages/admin/AdminCatalogPage';
 import { AdminApplicantsPage } from './pages/admin/AdminApplicantsPage';
 import { AdminMentorsPage } from './pages/admin/AdminMentorsPage';
@@ -258,6 +259,14 @@ export default function App() {
             />
 
             {/* Admin Routes */}
+            <Route
+              path="/admin/certificates"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminCertificatesPage />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="/admin/analytics"
               element={

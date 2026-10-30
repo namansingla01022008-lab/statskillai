@@ -382,7 +382,6 @@ export async function seedDatabase() {
     }
   }
 
-<<<<<<< HEAD
   // 11. Seed Initial Applications
   console.log('[Seed] Seeding Initial Applications...');
   const aarav = await prisma.user.findFirst({ where: { role: 'learner' } });
@@ -407,8 +406,33 @@ export async function seedDatabase() {
         status: 'Under review',
         matchPercentage: 82,
         notes: 'Submitted resume and SWAYAM certification verification ID.',
-=======
-  // 11. Seed Reward Rules
+      },
+    });
+  }
+
+  if (aarav && opp2) {
+    await prisma.application.upsert({
+      where: { id: 'app-init-2' },
+      update: {
+        status: 'Submitted',
+        matchPercentage: 78,
+      },
+      create: {
+        id: 'app-init-2',
+        opportunityId: opp2.id,
+        opportunityTitle: opp2.title,
+        organisation: opp2.organisation,
+        userId: aarav.id,
+        userName: aarav.name,
+        userEmail: aarav.email,
+        status: 'Submitted',
+        matchPercentage: 78,
+        notes: 'Enclosed provisional transcript and assessment scorecard.',
+      },
+    });
+  }
+
+  // 12. Seed Reward Rules
   console.log('[Seed] Seeding Reward Rules...');
   const DEFAULT_RULES = [
     { eventType: 'ASSESSMENT_PASS', label: 'Domain Assessment Passed', xpAmount: 10, description: 'Pass an objective psychometric competency assessment (≥60%)' },
@@ -435,36 +459,11 @@ export async function seedDatabase() {
         xpAmount: rule.xpAmount,
         description: rule.description,
         isActive: true,
->>>>>>> f5acb559fc19462e53255d9a0d777d74c98347d3
       },
     });
   }
 
-<<<<<<< HEAD
-  if (aarav && opp2) {
-    await prisma.application.upsert({
-      where: { id: 'app-init-2' },
-      update: {
-        status: 'Submitted',
-        matchPercentage: 78,
-      },
-      create: {
-        id: 'app-init-2',
-        opportunityId: opp2.id,
-        opportunityTitle: opp2.title,
-        organisation: opp2.organisation,
-        userId: aarav.id,
-        userName: aarav.name,
-        userEmail: aarav.email,
-        status: 'Submitted',
-        matchPercentage: 78,
-        notes: 'Enclosed provisional transcript and assessment scorecard.',
-      },
-    });
-  }
-
-=======
-  // 12. Seed Demo Rewards Catalogue
+  // 13. Seed Demo Rewards Catalogue
   console.log('[Seed] Seeding Reward Catalogue...');
   const DEMO_REWARDS = [
     {
@@ -563,10 +562,18 @@ export async function seedDatabase() {
 
   // 14. Seed Initial Balances & Streaks for Learners
   console.log('[Seed] Seeding Learner Balances & Streaks...');
+  const aaravLearner = (await prisma.user.findFirst({ where: { email: 'aarav.sharma@univ.edu.in' } })) ||
+                       (await prisma.user.findFirst({ where: { role: 'learner' } }));
+  const priyaLearner = await prisma.user.findFirst({ where: { email: 'priya.verma@mospi.gov.in' } });
+  const vikramLearner = await prisma.user.findFirst({ where: { email: 'vikram.m@analyticscloud.in' } });
+
+  const studentId = aaravLearner?.id || 'user-learner-student';
+  const govId = priyaLearner?.id || 'user-learner-gov';
+  const privateId = vikramLearner?.id || 'user-learner-private';
   const DEMO_BALANCES: Record<string, { totalEarned: number; balance: number; totalRedeemed: number; streak: number }> = {
-    'user-student': { totalEarned: 620, balance: 520, totalRedeemed: 100, streak: 5 },
-    'user-gov': { totalEarned: 480, balance: 480, totalRedeemed: 0, streak: 3 },
-    'user-private': { totalEarned: 350, balance: 350, totalRedeemed: 0, streak: 2 },
+    [studentId]: { totalEarned: 620, balance: 520, totalRedeemed: 100, streak: 5 },
+    [govId]: { totalEarned: 480, balance: 480, totalRedeemed: 0, streak: 3 },
+    [privateId]: { totalEarned: 350, balance: 350, totalRedeemed: 0, streak: 2 },
   };
 
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -622,7 +629,101 @@ export async function seedDatabase() {
     }
   }
 
->>>>>>> f5acb559fc19462e53255d9a0d777d74c98347d3
+
+  // 15. Seed Demo Certificates (Pending, Approved, Rejected)
+  console.log('[Seed] Seeding Demo Certificates for Admin Verification & Learner Rewards...');
+  const SEED_CERTIFICATES = [
+    {
+      id: 'cert-seed-approved-1',
+      userId: studentId,
+      courseName: 'Python for Data Science',
+      provider: 'NPTEL',
+      certId: 'NPTEL24CS101S1029384',
+      verificationUrl: 'https://nptel.ac.in/noc/Ecertificate/?q=NPTEL24CS101S1029384',
+      status: 'APPROVED',
+      adminNote: 'Verified via official NPTEL portal. Elite + Silver accreditation confirmed.',
+      rejectionReason: null,
+      xpAwarded: true,
+      verifiedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+    },
+    {
+      id: 'cert-seed-pending-1',
+      userId: studentId,
+      courseName: 'Machine Learning Foundations',
+      provider: 'Coursera',
+      certId: 'COURSERA-ML-892147',
+      verificationUrl: 'https://coursera.org/verify/COURSERA-ML-892147',
+      status: 'PENDING',
+      adminNote: 'Submitted by learner. Pending admin verification.',
+      rejectionReason: null,
+      xpAwarded: false,
+      verifiedAt: null,
+    },
+    {
+      id: 'cert-seed-pending-2',
+      userId: govId,
+      courseName: 'Public Governance and Digital Administration',
+      provider: 'iGOT',
+      certId: 'IGOT-GOV-2026-9041',
+      verificationUrl: 'https://igotkarmayogi.gov.in/verify/IGOT-GOV-2026-9041',
+      status: 'PENDING',
+      adminNote: 'Submitted by government employee. Pending nodal officer verification.',
+      rejectionReason: null,
+      xpAwarded: false,
+      verifiedAt: null,
+    },
+    {
+      id: 'cert-seed-rejected-1',
+      userId: privateId,
+      courseName: 'Data Engineering Pipelines with Spark',
+      provider: 'SWAYAM',
+      certId: 'SWAYAM-DE-2026-0012',
+      verificationUrl: 'https://swayam.gov.in/certificate/SWAYAM-DE-2026-0012',
+      status: 'REJECTED',
+      adminNote: 'Certificate verification link returned 404 Not Found on SWAYAM repository.',
+      rejectionReason: 'The provided verification URL does not resolve to a valid SWAYAM certificate record. Please check the ID and re-submit.',
+      xpAwarded: false,
+      verifiedAt: null,
+    },
+    {
+      id: 'cert-seed-approved-2',
+      userId: privateId,
+      courseName: 'Deep Learning Specialization',
+      provider: 'Coursera',
+      certId: 'COURSERA-DL-381029',
+      verificationUrl: 'https://coursera.org/verify/COURSERA-DL-381029',
+      status: 'APPROVED',
+      adminNote: 'DeepLearning.AI official certificate verified.',
+      rejectionReason: null,
+      xpAwarded: true,
+      verifiedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000),
+    },
+  ];
+
+  for (const cert of SEED_CERTIFICATES) {
+    const userExists = await prisma.user.findUnique({ where: { id: cert.userId } });
+    if (!userExists) continue;
+
+    await prisma.certificate.upsert({
+      where: {
+        userId_provider_certId: {
+          userId: cert.userId,
+          provider: cert.provider,
+          certId: cert.certId,
+        },
+      },
+      update: {
+        courseName: cert.courseName,
+        status: cert.status,
+        verificationUrl: cert.verificationUrl,
+        adminNote: cert.adminNote,
+        rejectionReason: cert.rejectionReason,
+        xpAwarded: cert.xpAwarded,
+        verifiedAt: cert.verifiedAt,
+      },
+      create: cert,
+    });
+  }
   console.log('[Seed] Database successfully seeded with factory data!');
 }
 

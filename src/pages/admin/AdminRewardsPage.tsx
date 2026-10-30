@@ -149,7 +149,7 @@ export const AdminRewardsPage: React.FC = () => {
   const handleRefundRedemption = async (redemptionId: string) => {
     const reason = prompt('Please enter the mandatory reason for issuing this refund:');
     if (!reason || reason.trim().length < 5) {
-      alert('A valid reason of at least 5 characters is required.');
+      setAlert({ type: 'error', text: 'A valid reason of at least 5 characters is required.' });
       return;
     }
 
