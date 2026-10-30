@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { GeminiService } from '../../services/geminiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { DomainType, OrgEmployee, AdminAnalyticsInsight } from '../../types';
 import { DOMAINS, calculateOverallScore } from '../../constants/competency';
 import { SkillGapHeatmap } from '../../components/admin/SkillGapHeatmap';
@@ -36,6 +37,7 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const AdminAnalyticsPage: React.FC = () => {
   const { t, language } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const [employees, setEmployees] = useState<OrgEmployee[]>(() =>
     StorageService.getOrgEmployees()
@@ -239,18 +241,25 @@ export const AdminAnalyticsPage: React.FC = () => {
           </button>
           <button
             onClick={handleGenerateAiInsights}
-            disabled={loadingInsights}
-            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs disabled:opacity-50 transition-colors"
+            disabled={loadingInsights || !isOnline}
+            title={!isOnline ? 'AI workforce analytics requires an online connection' : undefined}
+            className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs disabled:opacity-40 transition-colors"
           >
             {loadingInsights ? (
               <RotateCcw className="w-4 h-4 animate-spin" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span>{loadingInsights ? 'Analyzing...' : t('aiInsightsBtn')}</span>
+            <span>{loadingInsights ? 'Analyzing...' : !isOnline ? 'Online Only' : t('aiInsightsBtn')}</span>
           </button>
         </div>
       </div>
+
+      {!isOnline && (
+        <NoticeBanner type="warning" title="Offline Mode: Live Workforce Telemetry Paused">
+          Institutional analytics and multi-tenant telemetry are paused while offline to preserve confidential workforce records. Reconnect to sync latest institutional statistics.
+        </NoticeBanner>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

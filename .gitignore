@@ -6,3 +6,5 @@ coverage/
 *.log
 .env*
 .env.example
+offline-mode-deliverables.md
+storageoptimizer.md

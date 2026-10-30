@@ -2,6 +2,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { User, LearnerProfile, AppSettings, DomainType } from '../types';
 import { StorageService } from '../services/storageService';
 import { ApiService } from '../services/apiService';
+import { OfflineStorage } from '../services/offlineStorage';
+import { SyncService } from '../services/syncService';
 import { translations, TranslationKey } from '../constants/translations';
 
 interface NotificationPayload {
@@ -78,14 +80,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (profile) setActiveProfile(profile);
             const scores = await ApiService.getDomainScores().catch(() => null);
             if (scores) setDomainScores(scores);
+            // Preload minimal offline cache in background
+            SyncService.preloadOfflineCache(user).catch(() => {});
           } else {
             setIsAuthenticated(false);
             ApiService.clearToken();
           }
-        } catch (err) {
-          console.warn('Session verification failed, logging out session:', err);
-          setIsAuthenticated(false);
-          ApiService.clearToken();
+        } catch (err: any) {
+          console.warn('Session verification failed, checking offline fallback:', err);
+          const isNetworkError = typeof navigator !== 'undefined' && (!navigator.onLine || err.message?.includes('fetch') || err.message?.includes('NetworkError'));
+          const cachedUser = await OfflineStorage.getCache<{ name: string; role: string }>('user_minimal');
+          if (isNetworkError && cachedUser) {
+            console.info('[AppContext] Active offline authenticated session detected.');
+            setIsAuthenticated(true);
+            setCurrentUser((prev) => ({
+              ...prev,
+              name: cachedUser.data.name,
+              role: cachedUser.data.role as any,
+            }));
+          } else {
+            setIsAuthenticated(false);
+            ApiService.clearToken();
+            await OfflineStorage.wipeAllOfflineData();
+          }
         }
       } else {
         setIsAuthenticated(false);
@@ -136,6 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated(true);
       StorageService.setActiveUserId(user.id);
       await refreshScores();
+      SyncService.preloadOfflineCache(user).catch(() => {});
       return user;
     } finally {
       setIsLoadingAuth(false);
@@ -159,6 +177,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated(true);
       StorageService.setActiveUserId(user.id);
       await refreshScores();
+      SyncService.preloadOfflineCache(user).catch(() => {});
       return user;
     } finally {
       setIsLoadingAuth(false);
@@ -174,6 +193,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       ApiService.clearToken();
       setIsAuthenticated(false);
+      await OfflineStorage.wipeAllOfflineData();
     }
   };
 
@@ -185,6 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated(true);
       StorageService.setActiveUserId(user.id);
       await refreshScores();
+      SyncService.preloadOfflineCache(user).catch(() => {});
     } catch (err) {
       console.warn('Backend demo-switch unreachable, activating local switcher:', err);
       StorageService.setActiveUserId(userId);
@@ -193,6 +214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAuthenticated(true);
       setActiveProfile(StorageService.getProfile(user.id));
       setDomainScores(StorageService.getLatestDomainScores(user.id));
+      SyncService.preloadOfflineCache(user).catch(() => {});
     }
   };
 

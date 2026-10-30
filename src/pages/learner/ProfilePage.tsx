@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { LearnerProfile, PreviousTraining, ProfileType, DomainType } from '../../types';
 import { DOMAINS } from '../../constants/competency';
 import {
@@ -18,6 +19,7 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const ProfilePage: React.FC = () => {
   const { currentUser, activeProfile, updateProfile, t } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const [formData, setFormData] = useState<LearnerProfile>(() => {
     return (
@@ -127,6 +129,9 @@ export const ProfilePage: React.FC = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOnline) {
+      return;
+    }
     updateProfile(formData);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -163,6 +168,12 @@ export const ProfilePage: React.FC = () => {
       {saveSuccess && (
         <NoticeBanner type="success" title="Profile Successfully Updated">
           Your changes have been saved to local storage. AI diagnostics and learning paths will now reflect these updates.
+        </NoticeBanner>
+      )}
+
+      {!isOnline && (
+        <NoticeBanner type="info" title="Offline Mode: Profile Editing Disabled">
+          Profile updates are disabled while offline to maintain institutional record integrity. Connect to the internet to update your official profile.
         </NoticeBanner>
       )}
 
@@ -485,10 +496,12 @@ export const ProfilePage: React.FC = () => {
         <div className="flex justify-end pt-2">
           <button
             type="submit"
-            className="px-6 py-3 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-colors"
+            disabled={!isOnline}
+            title={!isOnline ? 'Profile edits are disabled while offline' : undefined}
+            className="px-6 py-3 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-md flex items-center gap-2 transition-colors disabled:opacity-40"
           >
             <Save className="w-4 h-4" />
-            <span>Save Profile & Update Diagnostics</span>
+            <span>{!isOnline ? 'Editing Disabled Offline' : 'Save Profile & Update Diagnostics'}</span>
           </button>
         </div>
       </form>

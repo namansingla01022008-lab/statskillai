@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Application, ApplicationStatus } from '../../types';
 import { Users, CheckCircle2, Search, Filter, Clock, Sparkles } from 'lucide-react';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const AdminApplicantsPage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const [applications, setApplications] = useState<Application[]>(() =>
     StorageService.getApplications()
   );
@@ -26,6 +28,11 @@ export const AdminApplicantsPage: React.FC = () => {
   }, []);
 
   const handleUpdateStatus = async (appId: string, newStatus: ApplicationStatus) => {
+    if (!isOnline) {
+      setNotice('Applicant pipeline status updates are disabled while offline.');
+      setTimeout(() => setNotice(null), 3000);
+      return;
+    }
     try {
       await ApiService.updateApplicationStatus(appId, newStatus);
     } catch (err) {
@@ -154,8 +161,9 @@ export const AdminApplicantsPage: React.FC = () => {
                   <td className="p-3 text-right">
                     <select
                       value={app.status}
+                      disabled={!isOnline}
                       onChange={(e) => handleUpdateStatus(app.id, e.target.value as ApplicationStatus)}
-                      className="px-2 py-1 border border-slate-300 rounded text-xs font-semibold"
+                      className="px-2 py-1 border border-slate-300 rounded text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <option value="Submitted">Submitted</option>
                       <option value="Under review">Under review</option>

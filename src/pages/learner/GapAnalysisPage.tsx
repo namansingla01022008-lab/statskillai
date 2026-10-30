@@ -3,6 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { GeminiService } from '../../services/geminiService';
+import { OfflineStorage } from '../../services/offlineStorage';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { GapAnalysis, DomainType } from '../../types';
 import { RadarCompetencyChart } from '../../components/learner/RadarCompetencyChart';
 import {
@@ -19,27 +21,43 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const GapAnalysisPage: React.FC = () => {
   const { currentUser, activeProfile, domainScores, t, language } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const [analysis, setAnalysis] = useState<GapAnalysis | null>(() =>
     StorageService.getGapAnalysis(currentUser.id)
   );
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [isAiGenerated, setIsAiGenerated] = useState<boolean | null>(null);
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
 
-  // Sync gap analysis from server on mount
+  // Sync gap analysis from server or IndexedDB on mount
   useEffect(() => {
+    let isMounted = true;
     async function syncGaps() {
       try {
         const remote = await ApiService.getGapAnalysis();
-        if (remote) {
+        if (remote && isMounted) {
           setAnalysis(remote);
+          setCachedAt(Date.now());
           StorageService.saveGapAnalysis(remote);
+          await OfflineStorage.setCache('gap_analysis', remote, currentUser.id);
+          return;
         }
       } catch (err) {
-        console.warn('Could not fetch remote gap analysis, using local state:', err);
+        console.warn('Could not fetch remote gap analysis, checking offline cache:', err);
+      }
+
+      const cached = await OfflineStorage.getCache<GapAnalysis>('gap_analysis');
+      if (cached && isMounted) {
+        setAnalysis(cached.data);
+        setCachedAt(cached.cachedAt);
       }
     }
     syncGaps();
+    return () => {
+      isMounted = false;
+    };
   }, [currentUser.id]);
 
   const targetScores = activeProfile?.targetDomainScores || {
@@ -50,6 +68,11 @@ export const GapAnalysisPage: React.FC = () => {
   };
 
   const handleRunAnalysis = async () => {
+    if (!isOnline) {
+      setOfflineNotice('AI Gap Analysis regeneration is disabled offline. Scores will automatically recalculate upon syncing completed assessment attempts.');
+      setTimeout(() => setOfflineNotice(null), 5000);
+      return;
+    }
     if (!activeProfile) return;
     setLoading(true);
 
@@ -90,6 +113,11 @@ export const GapAnalysisPage: React.FC = () => {
             <span className="text-xs text-slate-500">
               Last Updated: {analysis ? new Date(analysis.timestamp).toLocaleDateString() : 'Pending'}
             </span>
+            {cachedAt && (
+              <span className="text-[11px] text-slate-400 font-medium">
+                • Snapshot: {new Date(cachedAt).toLocaleDateString()} {new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
             {t('gapAnalysisTitle')}
@@ -101,17 +129,24 @@ export const GapAnalysisPage: React.FC = () => {
 
         <button
           onClick={handleRunAnalysis}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-colors shrink-0"
+          disabled={loading || !isOnline}
+          title={!isOnline ? 'AI diagnostic recalculation requires internet connection' : undefined}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-40 transition-colors shrink-0"
         >
           {loading ? (
             <RotateCcw className="w-4 h-4 animate-spin" />
           ) : (
             <Sparkles className="w-4 h-4" />
           )}
-          <span>{loading ? 'Analyzing with AI...' : t('recalculateGaps')}</span>
+          <span>{loading ? 'Analyzing with AI...' : !isOnline ? 'Online Only' : t('recalculateGaps')}</span>
         </button>
       </div>
+
+      {offlineNotice && (
+        <NoticeBanner type="info" title="Offline Notice">
+          {offlineNotice}
+        </NoticeBanner>
+      )}
 
       {isAiGenerated === false && (
         <NoticeBanner type="info" title="Offline Competency Engine Active">

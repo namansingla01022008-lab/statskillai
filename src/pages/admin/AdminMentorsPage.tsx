@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
 import { StorageService } from '../../services/storageService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Mentor } from '../../types';
 import { ShieldCheck, ShieldAlert, Star, Users, Check, X } from 'lucide-react';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const AdminMentorsPage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const [mentors, setMentors] = useState<Mentor[]>(() => StorageService.getMentors());
   const [notice, setNotice] = useState<string | null>(null);
 
   const handleToggleVerification = (mentorId: string) => {
+    if (!isOnline) {
+      setNotice('Mentor verification actions are disabled while offline.');
+      setTimeout(() => setNotice(null), 3000);
+      return;
+    }
     StorageService.toggleMentorVerification(mentorId);
     const updated = StorageService.getMentors();
     setMentors(updated);
@@ -21,6 +28,12 @@ export const AdminMentorsPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {!isOnline && (
+        <NoticeBanner type="warning" title="Mentor Verification Disabled Offline">
+          You are offline. Reviewing mentor credentials is allowed, but modifying verification statuses requires an active network connection.
+        </NoticeBanner>
+      )}
+
       {/* Header */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -94,8 +107,9 @@ export const AdminMentorsPage: React.FC = () => {
                 </td>
                 <td className="p-3 text-right">
                   <button
+                    disabled={!isOnline}
                     onClick={() => handleToggleVerification(m.id)}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors ${
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
                       m.isVerified
                         ? 'bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200'
                         : 'bg-teal-700 hover:bg-teal-800 text-white'

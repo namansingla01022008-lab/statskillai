@@ -1,0 +1,19 @@
+{
+  "name": "StatSkillAI - Competency & Career Development Platform",
+  "short_name": "StatSkillAI",
+  "description": "AI-powered competency measurement, skill-gap diagnostic, and career development platform.",
+  "theme_color": "#0d9488",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}
+

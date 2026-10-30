@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { GeminiService } from '../../services/geminiService';
+import { OfflineStorage, OutboxMutation } from '../../services/offlineStorage';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { LearningPath, LearningStep, StepStatus } from '../../types';
 import {
   GitBranch,
@@ -22,14 +24,52 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 export const LearningPathPage: React.FC = () => {
   const { currentUser, activeProfile, refreshScores, t, language } = useApp();
 
+  const { isOnline } = useNetworkStatus();
   const [learningPath, setLearningPath] = useState<LearningPath | null>(() =>
     StorageService.getLearningPath(currentUser.id)
   );
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [filterDomain, setFilterDomain] = useState<string>('All');
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
   const courses = StorageService.getCourses();
 
+  // Load from API or IndexedDB cache on mount
+  useEffect(() => {
+    let isMounted = true;
+    async function loadPath() {
+      try {
+        const live = await ApiService.getLearningPath();
+        if (live && isMounted) {
+          setLearningPath(live);
+          setCachedAt(Date.now());
+          await OfflineStorage.setCache('learning_path', live, currentUser.id);
+          return;
+        }
+      } catch (err) {
+        console.warn('[LearningPath] Live fetch failed, reading offline cache:', err);
+      }
+
+      // Offline fallback: read from IndexedDB cache
+      const cached = await OfflineStorage.getCache<LearningPath>('learning_path');
+      if (cached && isMounted) {
+        setLearningPath(cached.data);
+        setCachedAt(cached.cachedAt);
+      }
+    }
+
+    loadPath();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentUser.id]);
+
   const handleRegeneratePath = async () => {
+    if (!isOnline) {
+      setOfflineNotice('Learning path regeneration requires an online connection to query national portals.');
+      setTimeout(() => setOfflineNotice(null), 5000);
+      return;
+    }
     if (!activeProfile) return;
     setLoading(true);
 
@@ -58,7 +98,9 @@ export const LearningPathPage: React.FC = () => {
       }
 
       StorageService.saveLearningPath(newPath);
+      await OfflineStorage.setCache('learning_path', newPath, currentUser.id);
       setLearningPath(newPath);
+      setCachedAt(Date.now());
     } catch (err) {
       console.error('Failed generating path:', err);
     } finally {
@@ -67,16 +109,40 @@ export const LearningPathPage: React.FC = () => {
   };
 
   const handleStatusChange = async (stepId: string, newStatus: StepStatus) => {
-    try {
-      await ApiService.updateStepStatus(stepId, newStatus);
-      await refreshScores();
-    } catch (err) {
-      console.warn('Backend step status update fallback to local storage:', err);
+    let serverUpdated = false;
+    if (isOnline) {
+      try {
+        await ApiService.updateStepStatus(stepId, newStatus);
+        await refreshScores();
+        serverUpdated = true;
+      } catch (err) {
+        console.warn('Backend step status update fallback to offline outbox:', err);
+      }
+    }
+
+    // If offline or backend call didn't succeed, and step is marked Completed: queue outbox mutation
+    if (!serverUpdated && newStatus === 'Completed') {
+      const mutation: OutboxMutation = {
+        mutationId: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `mut-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        type: 'STEP_COMPLETE',
+        payload: {
+          stepId,
+          status: 'Completed',
+          completedAt: new Date().toISOString(),
+        },
+        createdAt: new Date().toISOString(),
+        status: 'pending',
+      };
+
+      await OfflineStorage.addToOutbox(mutation);
+      setOfflineNotice('Step marked as completed offline. Change queued for sync when reconnected.');
+      setTimeout(() => setOfflineNotice(null), 4000);
     }
 
     const updated = StorageService.updateLearningStepStatus(currentUser.id, stepId, newStatus);
     if (updated) {
       setLearningPath({ ...updated });
+      await OfflineStorage.setCache('learning_path', updated, currentUser.id);
     }
   };
 
@@ -96,6 +162,11 @@ export const LearningPathPage: React.FC = () => {
             <span className="text-xs text-slate-500">
               {steps.length} Sequenced Modules
             </span>
+            {cachedAt && (
+              <span className="text-[11px] text-slate-400 font-medium ml-2">
+                • Last updated: {new Date(cachedAt).toLocaleDateString()} {new Date(cachedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
             {t('learningPathTitle')}
@@ -107,17 +178,24 @@ export const LearningPathPage: React.FC = () => {
 
         <button
           onClick={handleRegeneratePath}
-          disabled={loading}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-colors shrink-0"
+          disabled={loading || !isOnline}
+          title={!isOnline ? 'Path regeneration requires internet connection' : undefined}
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-40 transition-colors shrink-0"
         >
           {loading ? (
             <RotateCcw className="w-4 h-4 animate-spin" />
           ) : (
             <Sparkles className="w-4 h-4" />
           )}
-          <span>{loading ? 'Synthesizing Path...' : 'Regenerate Learning Path'}</span>
+          <span>{loading ? 'Synthesizing Path...' : !isOnline ? 'Online Only' : 'Regenerate Learning Path'}</span>
         </button>
       </div>
+
+      {offlineNotice && (
+        <NoticeBanner type="info" title="Offline Notice">
+          {offlineNotice}
+        </NoticeBanner>
+      )}
 
       {learningPath ? (
         <div className="space-y-6">

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { Course, LearningStep } from '../../types';
@@ -23,6 +24,7 @@ export const MenteeDetailPage: React.FC = () => {
   const { id: menteeId } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentUser } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const profile = menteeId ? StorageService.getProfile(menteeId) : null;
   const user = menteeId ? StorageService.getUser(menteeId) : null;
@@ -63,6 +65,11 @@ export const MenteeDetailPage: React.FC = () => {
   // Handle Add Feedback Note -> Transmits via ApiService + Socket.io notification
   const handleAddFeedbackNote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOnline) {
+      setActionSuccess('Mentor actions are disabled offline.');
+      setTimeout(() => setActionSuccess(null), 3000);
+      return;
+    }
     if (!mentorship || !newNote.trim()) return;
 
     try {
@@ -83,6 +90,11 @@ export const MenteeDetailPage: React.FC = () => {
   // Handle Recommend Learning Step
   const handleRecommendCourse = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isOnline) {
+      setActionSuccess('Curriculum recommendations are disabled offline.');
+      setTimeout(() => setActionSuccess(null), 3000);
+      return;
+    }
     if (!mentorship || !selectedCourseId || !learningPath) return;
 
     const course = courses.find((c) => c.id === selectedCourseId);
@@ -118,6 +130,12 @@ export const MenteeDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {!isOnline && (
+        <NoticeBanner type="warning" title="Mentor Modification Actions Disabled">
+          You are offline. Mentee profiles and existing paths are viewable, but submitting directives or recommending curriculum steps requires internet connectivity.
+        </NoticeBanner>
+      )}
+
       {/* Back button & Read-Only Banner */}
       <div className="flex items-center justify-between">
         <button
@@ -329,7 +347,8 @@ export const MenteeDetailPage: React.FC = () => {
               />
               <button
                 type="submit"
-                className="w-full py-2 bg-teal-700 hover:bg-teal-800 text-white font-bold rounded-md"
+                disabled={!isOnline}
+                className="w-full py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-md"
               >
                 Transmit Directive Note
               </button>
@@ -377,8 +396,8 @@ export const MenteeDetailPage: React.FC = () => {
 
               <button
                 type="submit"
-                disabled={!selectedCourseId}
-                className="w-full py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-md disabled:opacity-50"
+                disabled={!isOnline || !selectedCourseId}
+                className="w-full py-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-md"
               >
                 Insert Course into Learning Path
               </button>

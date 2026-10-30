@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { ApiService } from '../../services/apiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Opportunity, Application, OpportunityType, DomainType } from '../../types';
 import { DOMAINS } from '../../constants/competency';
 import {
@@ -19,11 +21,24 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const OpportunitiesPage: React.FC = () => {
   const { currentUser, activeProfile, domainScores, t } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const opportunities = StorageService.getOpportunities();
   const [userApplications, setUserApplications] = useState<Application[]>(() =>
     StorageService.getUserApplications(currentUser.id)
   );
+
+  useEffect(() => {
+    ApiService.getMyApplications()
+      .then((apps) => {
+        if (apps && apps.length > 0) {
+          setUserApplications(apps);
+        }
+      })
+      .catch((err) => {
+        console.warn('Could not fetch server user applications:', err);
+      });
+  }, [currentUser.id]);
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -97,7 +112,12 @@ export const OpportunitiesPage: React.FC = () => {
   });
 
   // Handle Apply
-  const handleApply = (opp: (typeof oppsWithMatch)[0]) => {
+  const handleApply = async (opp: (typeof oppsWithMatch)[0]) => {
+    if (!isOnline) {
+      setAppliedNotice('Opportunity applications are disabled offline. Please connect to the internet to apply.');
+      setTimeout(() => setAppliedNotice(null), 4000);
+      return;
+    }
     const existing = userApplications.find((a) => a.opportunityId === opp.id);
     if (existing) return;
 
@@ -119,6 +139,12 @@ export const OpportunitiesPage: React.FC = () => {
     setUserApplications([newApp, ...userApplications]);
     setAppliedNotice(`Application for "${opp.title}" submitted successfully.`);
     setTimeout(() => setAppliedNotice(null), 4000);
+
+    try {
+      await ApiService.applyToOpportunity(opp.id, opp.matchPercentage, newApp.notes);
+    } catch (err) {
+      console.warn('Backend applyToOpportunity fallback to local storage:', err);
+    }
   };
 
   return (
@@ -336,9 +362,11 @@ export const OpportunitiesPage: React.FC = () => {
                     ) : (
                       <button
                         onClick={() => handleApply(opp)}
-                        className="w-full sm:w-auto px-5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs transition-colors"
+                        disabled={!isOnline}
+                        title={!isOnline ? 'Applications require an active internet connection' : undefined}
+                        className="w-full sm:w-auto px-5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs transition-colors disabled:opacity-40"
                       >
-                        {t('apply')}
+                        {!isOnline ? 'Online Only' : t('apply')}
                       </button>
                     )}
                   </div>

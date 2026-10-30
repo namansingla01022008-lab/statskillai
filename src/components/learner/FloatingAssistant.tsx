@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { GeminiService } from '../../services/geminiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { ChatMessage } from '../../types';
 import {
   MessageSquare,
@@ -12,10 +13,12 @@ import {
   Bot,
   User,
   ShieldAlert,
+  WifiOff,
 } from 'lucide-react';
 
 export const FloatingAssistant: React.FC = () => {
   const { currentUser, activeProfile, domainScores, language, t } = useApp();
+  const { isOnline } = useNetworkStatus();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -203,6 +206,23 @@ export const FloatingAssistant: React.FC = () => {
             </div>
           </div>
 
+          {/* Offline Warning Notice */}
+          {!isOnline && (
+            <div className="p-3 bg-amber-50 border-b border-amber-200 text-xs text-amber-900 flex items-start gap-2">
+              <WifiOff className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="font-bold text-[11px]">AI Companion Unavailable Offline</p>
+                <p className="text-[10px] text-amber-800 leading-snug">
+                  Gemini AI cloud generation requires internet access. You can attempt your{' '}
+                  <a href="#/assessment" className="underline font-bold text-amber-950">
+                    preloaded offline assessment
+                  </a>{' '}
+                  instead.
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Persona Disclaimer Banner */}
           <div className="bg-slate-50 border-b border-slate-200 px-3 py-1.5 text-[10px] text-slate-500 flex items-center justify-between">
             <span>AI Educational Mentor • No employment guarantees</span>
@@ -293,14 +313,14 @@ export const FloatingAssistant: React.FC = () => {
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={t('chatPlaceholder')}
-              className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-teal-500 focus:border-teal-500"
-              disabled={loading}
+              placeholder={!isOnline ? 'AI Assistant is offline...' : t('chatPlaceholder')}
+              className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md focus:outline-hidden focus:ring-2 focus:ring-teal-500 focus:border-teal-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
+              disabled={loading || !isOnline}
               aria-label="Ask learning assistant"
             />
             <button
               type="submit"
-              disabled={loading || !input.trim()}
+              disabled={loading || !input.trim() || !isOnline}
               className="p-2 rounded-md bg-teal-700 hover:bg-teal-800 text-white disabled:opacity-50 transition-colors"
               aria-label="Send message"
             >

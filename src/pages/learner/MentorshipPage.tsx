@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Mentor, Mentorship, DirectMessage } from '../../types';
 import {
   Users,
@@ -19,6 +20,8 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const MentorshipPage: React.FC = () => {
   const { currentUser, activeProfile, t } = useApp();
+  const { isOnline } = useNetworkStatus();
+  const [isSocketConnected, setIsSocketConnected] = useState(false);
 
   const mentors = StorageService.getMentors();
   const [mentorships, setMentorships] = useState<Mentorship[]>(() =>
@@ -74,6 +77,13 @@ export const MentorshipPage: React.FC = () => {
     // 2. Real-time Socket.io listeners
     try {
       const socket = ApiService.getSocket();
+      setIsSocketConnected(socket.connected);
+
+      const onConnect = () => setIsSocketConnected(true);
+      const onDisconnect = () => setIsSocketConnected(false);
+      socket.on('connect', onConnect);
+      socket.on('disconnect', onDisconnect);
+
       socket.emit('join_mentorship', currentMentorship.id);
 
       const handleNewMessage = (newMsg: DirectMessage) => {
@@ -103,6 +113,8 @@ export const MentorshipPage: React.FC = () => {
       socket.on('typing_stop', handleTypingStop);
 
       return () => {
+        socket.off('connect', onConnect);
+        socket.off('disconnect', onDisconnect);
         socket.emit('leave_mentorship', currentMentorship.id);
         socket.off('new_message', handleNewMessage);
         socket.off('typing_start', handleTypingStart);
@@ -411,6 +423,22 @@ export const MentorshipPage: React.FC = () => {
                   </div>
                 )}
 
+                {/* Connection Status Bar */}
+                <div className="px-3 py-1 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500">Connection Status:</span>
+                  {isOnline && isSocketConnected ? (
+                    <span className="text-emerald-700 font-semibold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                      Live WebSocket
+                    </span>
+                  ) : (
+                    <span className="text-amber-700 font-semibold flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 inline-block" />
+                      Disconnected (Offline)
+                    </span>
+                  )}
+                </div>
+
                 {/* Message Input Form */}
                 <form
                   onSubmit={handleSendMessage}
@@ -420,18 +448,24 @@ export const MentorshipPage: React.FC = () => {
                     type="text"
                     value={replyText}
                     onChange={handleReplyChange}
-                    placeholder="Type progress update or question for mentor..."
-                    className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500"
+                    disabled={!isOnline}
+                    placeholder={!isOnline ? "Chat is disabled while offline..." : "Type progress update or question for mentor..."}
+                    className="flex-1 px-3 py-2 text-xs border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500 disabled:bg-slate-100 disabled:cursor-not-allowed"
                   />
                   <button
                     type="submit"
-                    disabled={!replyText.trim()}
+                    disabled={!isOnline || !replyText.trim()}
                     className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold disabled:opacity-50 flex items-center gap-1.5"
                   >
                     <Send className="w-3.5 h-3.5" />
                     <span>Send</span>
                   </button>
                 </form>
+                {!isOnline && (
+                  <div className="px-3 py-1.5 bg-amber-50 border-t border-amber-200/50 text-[11px] text-amber-800">
+                    Live chat is paused while offline. Messages are not queued to avoid stale or duplicated transmissions.
+                  </div>
+                )}
               </div>
             </div>
           )}

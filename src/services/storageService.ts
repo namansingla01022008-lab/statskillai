@@ -30,54 +30,79 @@ import {
   SEED_DIRECT_MESSAGES,
   generateSeedOrgEmployees,
 } from './seedData';
+import { storage } from './storage';
+import { runStorageMigration } from './storageMigration';
+import {
+  StorageMappers,
+  QuestionCacheMap,
+  CompactAttempt,
+  CompactQuiz,
+} from './storageMappers';
+import {
+  STORAGE_CAPS,
+  QUESTION_CACHE_TTL_MS,
+} from './storageConfig';
 
-const PREFIX = 'statskillai:';
-
-function getKey(collection: string): string {
-  return `${PREFIX}${collection}`;
-}
-
+// Generic getItem / setItem wrappers maintaining backward compatibility
 export function getItem<T>(collection: string, defaultValue: T): T {
-  try {
-    const raw = localStorage.getItem(getKey(collection));
-    if (!raw) return defaultValue;
-    return JSON.parse(raw) as T;
-  } catch (err) {
-    console.error(`Failed to read collection ${collection}:`, err);
+  const loaded = storage.load<T>(collection);
+  if (loaded === null || loaded === undefined) {
     return defaultValue;
   }
+  return loaded;
 }
 
 export function setItem<T>(collection: string, value: T): void {
-  try {
-    localStorage.setItem(getKey(collection), JSON.stringify(value));
-  } catch (err) {
-    console.error(`Failed to save collection ${collection}:`, err);
-  }
+  storage.save(collection, value);
+}
+
+// Helper to access and persist the shared question cache
+function getQuestionCache(): QuestionCacheMap {
+  return storage.load<QuestionCacheMap>('questions_cache') || {};
+}
+
+function saveQuestionCache(cache: QuestionCacheMap): void {
+  StorageMappers.trimQuestionCache(cache, STORAGE_CAPS.MAX_QUESTIONS_CACHE);
+  storage.save('questions_cache', cache, QUESTION_CACHE_TTL_MS);
 }
 
 export const StorageService = {
   // Initialization & Reset
   initStorage(forceReset = false): void {
-    const isInitialized = localStorage.getItem(`${PREFIX}initialized`);
+    // 1. Run versioned migration for any legacy statskillai:* keys
+    runStorageMigration();
+
+    const isInitialized = storage.load<boolean>('initialized');
     if (isInitialized && !forceReset) {
       return;
     }
 
-    // Seed default datasets
-    setItem<User[]>('users', SEED_USERS);
-    setItem<Course[]>('courses', SEED_COURSES);
-    setItem<Opportunity[]>('opportunities', SEED_OPPORTUNITIES);
-    setItem<any[]>('organisations', SEED_ORGANISATIONS);
-    setItem<Mentor[]>('mentors', SEED_MENTORS);
-    setItem<Record<string, LearnerProfile>>('profiles', SEED_PROFILES);
-    setItem<Record<string, AssessmentAttempt[]>>('assessmentAttempts', SEED_INITIAL_ATTEMPTS);
-    setItem<Record<string, GapAnalysis>>('gapAnalyses', SEED_INITIAL_GAPS);
-    setItem<Record<string, LearningPath>>('learningPaths', SEED_INITIAL_LEARNING_PATH);
-    setItem<Mentorship[]>('mentorships', SEED_MENTORSHIPS);
-    setItem<DirectMessage[]>('messages', SEED_DIRECT_MESSAGES);
-    setItem<OrgEmployee[]>('orgEmployees', generateSeedOrgEmployees());
-    setItem<Application[]>('applications', [
+    // Initialize question cache & compact seed attempts
+    const questionCache: QuestionCacheMap = {};
+    const compactSeedAttempts: Record<string, CompactAttempt[]> = {};
+
+    for (const userId of Object.keys(SEED_INITIAL_ATTEMPTS)) {
+      const attempts = SEED_INITIAL_ATTEMPTS[userId] || [];
+      compactSeedAttempts[userId] = attempts.map((att) =>
+        StorageMappers.attemptToStorage(att, questionCache)
+      );
+    }
+    saveQuestionCache(questionCache);
+
+    // Seed default datasets into storage wrapper
+    storage.save('users', SEED_USERS);
+    storage.save('courses', SEED_COURSES);
+    storage.save('opportunities', SEED_OPPORTUNITIES);
+    storage.save('organisations', SEED_ORGANISATIONS);
+    storage.save('mentors', SEED_MENTORS);
+    storage.save('profiles', SEED_PROFILES);
+    storage.save('assessmentAttempts', compactSeedAttempts);
+    storage.save('gapAnalyses', SEED_INITIAL_GAPS);
+    storage.save('learningPaths', SEED_INITIAL_LEARNING_PATH);
+    storage.save('mentorships', SEED_MENTORSHIPS);
+    storage.save('messages', SEED_DIRECT_MESSAGES);
+    storage.save('orgEmployees', generateSeedOrgEmployees());
+    storage.save('applications', [
       {
         id: 'app-init-1',
         opportunityId: 'opp-101',
@@ -104,8 +129,8 @@ export const StorageService = {
         matchPercentage: 78,
       },
     ]);
-    setItem<QuizRecord[]>('quizzes', []);
-    setItem<ChatMessage[]>('chatHistory', [
+    storage.save('quizzes', []);
+    storage.save('chatHistory', [
       {
         id: 'chat-seed-1',
         userId: 'user-learner-student',
@@ -122,19 +147,16 @@ export const StorageService = {
       fontSize: 'default',
       activeUserId: 'user-learner-student',
     };
-    setItem<AppSettings>('settings', defaultSettings);
+    storage.save('settings', defaultSettings);
+    storage.save('initialized', true);
 
-    localStorage.setItem(`${PREFIX}initialized`, 'true');
-    console.log('StatSkillAI localStorage seeded successfully.');
+    if (process.env.NODE_ENV !== 'production') {
+      console.log('StatSkillAI optimized storage initialized successfully.');
+    }
   },
 
   resetAllData(): void {
-    // Clear only StatSkillAI keys
-    Object.keys(localStorage).forEach((k) => {
-      if (k.startsWith(PREFIX)) {
-        localStorage.removeItem(k);
-      }
-    });
+    storage.clearAll();
     this.initStorage(true);
   },
 
@@ -151,7 +173,7 @@ export const StorageService = {
   saveSettings(settings: Partial<AppSettings>): AppSettings {
     const current = this.getSettings();
     const updated = { ...current, ...settings };
-    setItem('settings', updated);
+    storage.save('settings', updated);
     return updated;
   },
 
@@ -183,7 +205,6 @@ export const StorageService = {
 
   saveProfile(profile: LearnerProfile): void {
     const profiles = getItem<Record<string, LearnerProfile>>('profiles', {});
-    // calculate completeness
     let score = 0;
     if (profile.fullName) score += 10;
     if (profile.highestEducation) score += 10;
@@ -198,13 +219,18 @@ export const StorageService = {
     profile.updatedAt = new Date().toISOString();
 
     profiles[profile.userId] = profile;
-    setItem('profiles', profiles);
+    storage.save('profiles', profiles);
   },
 
-  // Assessment Attempts
+  // Assessment Attempts (Optimized via Shared Normalized Question Cache & Compact Shapes)
   getAttempts(userId: string): AssessmentAttempt[] {
-    const all = getItem<Record<string, AssessmentAttempt[]>>('assessmentAttempts', {});
-    return all[userId] || [];
+    const all = storage.load<Record<string, CompactAttempt[]>>('assessmentAttempts') || {};
+    const userCompactAttempts = all[userId] || [];
+    const questionCache = getQuestionCache();
+
+    return userCompactAttempts.map((compact) =>
+      StorageMappers.attemptFromStorage(compact, questionCache)
+    );
   },
 
   getLatestDomainScores(userId: string): Record<DomainType, number> {
@@ -230,11 +256,24 @@ export const StorageService = {
   },
 
   saveAttempt(attempt: AssessmentAttempt): void {
-    const all = getItem<Record<string, AssessmentAttempt[]>>('assessmentAttempts', {});
+    const all = storage.load<Record<string, CompactAttempt[]>>('assessmentAttempts') || {};
+    const questionCache = getQuestionCache();
+
+    // Normalize question records into shared cache and convert attempt to compact shape
+    const compact = StorageMappers.attemptToStorage(attempt, questionCache);
+    saveQuestionCache(questionCache);
+
     const userAttempts = all[attempt.userId] || [];
-    userAttempts.unshift(attempt);
-    all[attempt.userId] = userAttempts;
-    setItem('assessmentAttempts', all);
+    userAttempts.unshift(compact);
+
+    // Enforce capacity bounds (MAX_ATTEMPTS_PER_USER)
+    if (userAttempts.length > STORAGE_CAPS.MAX_ATTEMPTS_PER_USER) {
+      all[attempt.userId] = userAttempts.slice(0, STORAGE_CAPS.MAX_ATTEMPTS_PER_USER);
+    } else {
+      all[attempt.userId] = userAttempts;
+    }
+
+    storage.save('assessmentAttempts', all);
   },
 
   // Gap Analysis
@@ -246,7 +285,7 @@ export const StorageService = {
   saveGapAnalysis(analysis: GapAnalysis): void {
     const all = getItem<Record<string, GapAnalysis>>('gapAnalyses', {});
     all[analysis.userId] = analysis;
-    setItem('gapAnalyses', all);
+    storage.save('gapAnalyses', all);
   },
 
   // Learning Paths
@@ -257,7 +296,6 @@ export const StorageService = {
 
   saveLearningPath(path: LearningPath): void {
     const all = getItem<Record<string, LearningPath>>('learningPaths', {});
-    // calculate progressPercent
     if (path.steps && path.steps.length > 0) {
       const completed = path.steps.filter((s) => s.status === 'Completed').length;
       path.progressPercent = Math.round((completed / path.steps.length) * 100);
@@ -268,7 +306,7 @@ export const StorageService = {
     }
     path.updatedAt = new Date().toISOString();
     all[path.userId] = path;
-    setItem('learningPaths', all);
+    storage.save('learningPaths', all);
   },
 
   updateLearningStepStatus(
@@ -299,12 +337,12 @@ export const StorageService = {
     } else {
       list.push(course);
     }
-    setItem('courses', list);
+    storage.save('courses', list);
   },
 
   deleteCourse(courseId: string): void {
     const list = this.getCourses().filter((c) => c.id !== courseId);
-    setItem('courses', list);
+    storage.save('courses', list);
   },
 
   // Opportunities
@@ -320,12 +358,12 @@ export const StorageService = {
     } else {
       list.push(opp);
     }
-    setItem('opportunities', list);
+    storage.save('opportunities', list);
   },
 
   deleteOpportunity(oppId: string): void {
     const list = this.getOpportunities().filter((o) => o.id !== oppId);
-    setItem('opportunities', list);
+    storage.save('opportunities', list);
   },
 
   // Applications
@@ -345,7 +383,9 @@ export const StorageService = {
     } else {
       list.unshift(app);
     }
-    setItem('applications', list);
+    // Trim to capacity limit
+    const trimmed = list.slice(0, STORAGE_CAPS.MAX_APPLICATIONS);
+    storage.save('applications', trimmed);
   },
 
   updateApplicationStatus(id: string, status: Application['status']): void {
@@ -353,7 +393,7 @@ export const StorageService = {
     const item = list.find((a) => a.id === id);
     if (item) {
       item.status = status;
-      setItem('applications', list);
+      storage.save('applications', list);
     }
   },
 
@@ -370,7 +410,7 @@ export const StorageService = {
       if (m.isVerified) {
         m.verifiedDate = new Date().toISOString().split('T')[0];
       }
-      setItem('mentors', mentors);
+      storage.save('mentors', mentors);
     }
   },
 
@@ -394,10 +434,10 @@ export const StorageService = {
     } else {
       list.unshift(mentorship);
     }
-    setItem('mentorships', list);
+    storage.save('mentorships', list);
   },
 
-  // Direct Messages
+  // Direct Messages (Optimized with per-thread bounds)
   getMessages(mentorshipId: string): DirectMessage[] {
     const all = getItem<DirectMessage[]>('messages', SEED_DIRECT_MESSAGES);
     return all.filter((m) => m.mentorshipId === mentorshipId);
@@ -406,10 +446,11 @@ export const StorageService = {
   sendMessage(msg: DirectMessage): void {
     const all = getItem<DirectMessage[]>('messages', SEED_DIRECT_MESSAGES);
     all.push(msg);
-    setItem('messages', all);
+    const trimmed = StorageMappers.trimMessages(all, STORAGE_CAPS.MAX_MESSAGES_PER_CONVERSATION);
+    storage.save('messages', trimmed);
   },
 
-  // Chatbot History
+  // Chatbot History (Optimized with per-user bounds)
   getChatHistory(userId: string): ChatMessage[] {
     const all = getItem<ChatMessage[]>('chatHistory', []);
     return all.filter((m) => m.userId === userId);
@@ -418,25 +459,38 @@ export const StorageService = {
   saveChatMessage(msg: ChatMessage): void {
     const all = getItem<ChatMessage[]>('chatHistory', []);
     all.push(msg);
-    setItem('chatHistory', all);
+    const trimmed = StorageMappers.trimChatHistory(all, STORAGE_CAPS.MAX_CHAT_HISTORY_PER_USER);
+    // Debounce chat writes to avoid main-thread stutter during streaming
+    storage.saveDebounced('chatHistory', trimmed);
   },
 
   clearChatHistory(userId: string): void {
     const all = getItem<ChatMessage[]>('chatHistory', []);
     const filtered = all.filter((m) => m.userId !== userId);
-    setItem('chatHistory', filtered);
+    storage.save('chatHistory', filtered);
   },
 
-  // Quizzes
+  // Quizzes (Optimized with Question Normalization & Capacity Cap)
   getQuizzes(userId: string): QuizRecord[] {
-    const all = getItem<QuizRecord[]>('quizzes', []);
-    return all.filter((q) => q.userId === userId);
+    const all = storage.load<CompactQuiz[]>('quizzes') || [];
+    const userQuizzes = all.filter((q) => q.uId === userId);
+    const questionCache = getQuestionCache();
+
+    return userQuizzes.map((compact) =>
+      StorageMappers.quizFromStorage(compact, questionCache)
+    );
   },
 
   saveQuiz(quiz: QuizRecord): void {
-    const all = getItem<QuizRecord[]>('quizzes', []);
-    all.unshift(quiz);
-    setItem('quizzes', all);
+    const all = storage.load<CompactQuiz[]>('quizzes') || [];
+    const questionCache = getQuestionCache();
+
+    const compact = StorageMappers.quizToStorage(quiz, questionCache);
+    saveQuestionCache(questionCache);
+
+    all.unshift(compact);
+    const trimmed = StorageMappers.trimQuizzes(all, STORAGE_CAPS.MAX_QUIZZES_PER_USER);
+    storage.save('quizzes', trimmed);
   },
 
   // Organization Employees (Admin Analytics)

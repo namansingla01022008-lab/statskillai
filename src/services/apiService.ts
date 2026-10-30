@@ -351,4 +351,33 @@ export const ApiService = {
     });
     return data.quiz;
   },
+
+  // 11. Offline Sync & Preloaded Questions APIs
+  async pingHealth(): Promise<boolean> {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3500);
+      const url = `${API_BASE_URL}/api/health`;
+      const res = await fetch(url, {
+        method: 'GET',
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return res.ok;
+    } catch {
+      return false;
+    }
+  },
+
+  async getOfflineQuestions(): Promise<any[]> {
+    const data = await this.fetchApi<{ success: boolean; questions: any[] }>('/api/offline/questions');
+    return data.questions;
+  },
+
+  async syncOfflineMutations(mutations: any[]): Promise<{ success: boolean; processed: any[] }> {
+    return await this.fetchApi<{ success: boolean; processed: any[] }>('/api/offline/sync', {
+      method: 'POST',
+      body: JSON.stringify({ mutations }),
+    });
+  },
 };

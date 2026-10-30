@@ -3,6 +3,8 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { GeminiService } from '../../services/geminiService';
+import { OfflineStorage, OutboxMutation } from '../../services/offlineStorage';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { DomainType, DifficultyLevel, QuestionRecord, AssessmentAttempt } from '../../types';
 import { DOMAINS, DIFFICULTY_WEIGHTS, calculateDomainScore, getProficiencyLevel } from '../../constants/competency';
 import { ScoreBadge } from '../../components/common/ScoreBadge';
@@ -22,9 +24,17 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const AdaptiveAssessmentPage: React.FC = () => {
   const { currentUser, activeProfile, refreshScores, t, language } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const [selectedDomain, setSelectedDomain] = useState<DomainType>('Statistical');
   const [assessmentState, setAssessmentState] = useState<'idle' | 'testing' | 'results'>('idle');
+
+  // Offline assessment states
+  const [isOfflineAttempt, setIsOfflineAttempt] = useState(false);
+  const [offlineSubmitted, setOfflineSubmitted] = useState(false);
+  const [attemptStartTime, setAttemptStartTime] = useState<string>('');
+  const [offlineAnswers, setOfflineAnswers] = useState<Array<{ questionId: string; selectedOption: number; answeredAt: string }>>([]);
+  const [offlineQuestionsList, setOfflineQuestionsList] = useState<any[]>([]);
 
   // Assessment run state
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0); // 0 to 4 (5 questions)
@@ -96,12 +106,12 @@ export const AdaptiveAssessmentPage: React.FC = () => {
   const handleStart = async (domain: DomainType) => {
     setSelectedDomain(domain);
     setCurrentQuestionIndex(0);
-    setCurrentDifficulty('Medium');
-    setServedQuestions([]);
     setAnswers([]);
     setEarnedWeights([]);
     setServedWeights([]);
-    setAssessmentState('testing');
+    setSelectedAnswerIndex(null);
+    setIsAnswerSubmitted(false);
+    setTimeLeft(60);
 
     // Find previous score for this domain
     const attempts = StorageService.getAttempts(currentUser.id).filter(
@@ -113,13 +123,96 @@ export const AdaptiveAssessmentPage: React.FC = () => {
       setPreviousScore(undefined);
     }
 
+    // Check if offline
+    if (!isOnline) {
+      setIsOfflineAttempt(true);
+      setOfflineSubmitted(false);
+      setAttemptStartTime(new Date().toISOString());
+      setOfflineAnswers([]);
+
+      let cached = await OfflineStorage.getCache<any[]>('offline_questions');
+      let domainQuestions = (cached?.data || []).filter((q: any) => q.domain === domain);
+
+      if (domainQuestions.length === 0) {
+        try {
+          const fetched = await ApiService.getOfflineQuestions();
+          await OfflineStorage.setCache('offline_questions', fetched, currentUser.id);
+          domainQuestions = fetched.filter((q: any) => q.domain === domain);
+        } catch {}
+      }
+
+      const selected5 = domainQuestions.slice(0, 5);
+      if (selected5.length > 0) {
+        setOfflineQuestionsList(selected5);
+        setCurrentQuestion(selected5[0]);
+        setCurrentDifficulty(selected5[0].difficulty || 'Medium');
+        setAssessmentState('testing');
+        return;
+      }
+    }
+
+    // Online path
+    setIsOfflineAttempt(false);
+    setOfflineSubmitted(false);
+    setCurrentDifficulty('Medium');
+    setServedQuestions([]);
+    setAssessmentState('testing');
+
     await fetchNextQuestion(domain, 'Medium', []);
   };
 
-  // Submit answer for immediate feedback
-  const handleConfirmAnswer = (timeExpired = false) => {
-    if (!currentQuestion || isAnswerSubmitted) return;
+  // Submit answer
+  const handleConfirmAnswer = async (timeExpired = false) => {
+    if (!currentQuestion) return;
 
+    // Offline assessment submission handler
+    if (isOfflineAttempt) {
+      const answerIdx = timeExpired ? -1 : (selectedAnswerIndex !== null ? selectedAnswerIndex : -1);
+      const nextAnswers = [
+        ...offlineAnswers,
+        {
+          questionId: currentQuestion.id,
+          selectedOption: answerIdx,
+          answeredAt: new Date().toISOString(),
+        },
+      ];
+      setOfflineAnswers(nextAnswers);
+
+      const nextIndex = currentQuestionIndex + 1;
+      if (nextIndex < 5 && nextIndex < offlineQuestionsList.length) {
+        setCurrentQuestionIndex(nextIndex);
+        const nextQ = offlineQuestionsList[nextIndex];
+        setCurrentQuestion(nextQ);
+        setCurrentDifficulty(nextQ.difficulty || 'Medium');
+        setSelectedAnswerIndex(null);
+        setTimeLeft(60);
+      } else {
+        // Complete 5 offline questions -> store outbox mutation
+        const attemptId = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `att-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        const mutation: OutboxMutation = {
+          mutationId: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `mut-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+          type: 'ASSESSMENT_SUBMIT',
+          payload: {
+            attemptId,
+            domain: selectedDomain,
+            questionSetVersion: 'v1',
+            answers: nextAnswers,
+            startedAt: attemptStartTime,
+            submittedAt: new Date().toISOString(),
+          },
+          createdAt: new Date().toISOString(),
+          status: 'pending',
+        };
+
+        await OfflineStorage.addToOutbox(mutation);
+        setOfflineSubmitted(true);
+        setAssessmentState('results');
+      }
+      return;
+    }
+
+    // Online path with immediate pedagogical feedback
+    if (isAnswerSubmitted) return;
     const answerIdx = timeExpired ? -1 : (selectedAnswerIndex !== null ? selectedAnswerIndex : -1);
     const isCorrect = answerIdx === currentQuestion.correctIndex;
     const weight = DIFFICULTY_WEIGHTS[currentQuestion.difficulty];
@@ -359,7 +452,11 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                   let optionStyle =
                     'border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-800';
 
-                  if (isAnswerSubmitted) {
+                  if (isOfflineAttempt) {
+                    if (isSelected) {
+                      optionStyle = 'border-teal-600 bg-teal-50 text-teal-950 font-semibold ring-2 ring-teal-500';
+                    }
+                  } else if (isAnswerSubmitted) {
                     if (idx === currentQuestion.correctIndex) {
                       optionStyle = 'border-emerald-500 bg-emerald-50 text-emerald-950 font-bold';
                     } else if (isSelected) {
@@ -375,7 +472,7 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                     <button
                       key={idx}
                       type="button"
-                      disabled={isAnswerSubmitted}
+                      disabled={!isOfflineAttempt && isAnswerSubmitted}
                       onClick={() => setSelectedAnswerIndex(idx)}
                       className={`w-full p-3.5 rounded-lg border text-left text-xs sm:text-sm flex items-start gap-3 transition-all ${optionStyle}`}
                     >
@@ -383,10 +480,10 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                         {String.fromCharCode(65 + idx)}
                       </span>
                       <span className="flex-1 leading-snug">{option}</span>
-                      {isAnswerSubmitted && idx === currentQuestion.correctIndex && (
+                      {!isOfflineAttempt && isAnswerSubmitted && idx === currentQuestion.correctIndex && (
                         <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                       )}
-                      {isAnswerSubmitted && isSelected && idx !== currentQuestion.correctIndex && (
+                      {!isOfflineAttempt && isAnswerSubmitted && isSelected && idx !== currentQuestion.correctIndex && (
                         <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                       )}
                     </button>
@@ -394,8 +491,8 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                 })}
               </div>
 
-              {/* Immediate Feedback with Explanation */}
-              {isAnswerSubmitted && (
+              {/* Immediate Feedback with Explanation (Online only) */}
+              {!isOfflineAttempt && isAnswerSubmitted && (
                 <div
                   className={`p-4 rounded-lg border text-xs sm:text-sm space-y-1.5 ${
                     selectedAnswerIndex === currentQuestion.correctIndex
@@ -433,7 +530,17 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                   Exit Assessment
                 </button>
 
-                {!isAnswerSubmitted ? (
+                {isOfflineAttempt ? (
+                  <button
+                    type="button"
+                    disabled={selectedAnswerIndex === null}
+                    onClick={() => handleConfirmAnswer(false)}
+                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-colors"
+                  >
+                    <span>{currentQuestionIndex === 4 ? 'Submit Offline Assessment' : 'Next Question'}</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : !isAnswerSubmitted ? (
                   <button
                     type="button"
                     disabled={selectedAnswerIndex === null}
@@ -459,7 +566,56 @@ export const AdaptiveAssessmentPage: React.FC = () => {
       )}
 
       {/* STATE 3: RESULTS PAGE */}
-      {assessmentState === 'results' && lastAttempt && (
+      {assessmentState === 'results' && (
+        offlineSubmitted ? (
+          <div className="bg-white rounded-xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6 text-center animate-in fade-in-50">
+            <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-800 mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full">
+                Offline Submission Recorded
+              </span>
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900">
+                Answers saved. Results will be available after you reconnect.
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-600 max-w-md mx-auto leading-relaxed">
+                Your responses for the <strong>{selectedDomain}</strong> domain have been safely stored in your device outbox. To prevent score tampering, your official score and gap analysis will be calculated by the authoritative server upon reconnection.
+              </p>
+            </div>
+
+            <div className="max-w-xs mx-auto p-4 rounded-xl bg-slate-50 border border-slate-200 text-left text-xs space-y-2">
+              <div className="flex justify-between text-slate-600">
+                <span>Domain:</span>
+                <strong className="text-slate-900">{selectedDomain}</strong>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Questions Completed:</span>
+                <strong className="text-slate-900">5 / 5</strong>
+              </div>
+              <div className="flex justify-between text-slate-600">
+                <span>Sync Status:</span>
+                <strong className="text-amber-700 font-bold">Pending Reconnection</strong>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+              <button
+                onClick={() => setAssessmentState('idle')}
+                className="px-4 py-2.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors"
+              >
+                Choose Another Domain
+              </button>
+              <a
+                href="#/learning-path"
+                className="px-5 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold shadow-xs transition-colors"
+              >
+                Go to Learning Path
+              </a>
+            </div>
+          </div>
+        ) : lastAttempt ? (
         <div className="bg-white rounded-xl p-6 sm:p-8 border border-slate-200 shadow-xs space-y-6 text-center animate-in fade-in-50">
           <div className="w-16 h-16 rounded-full bg-teal-100 text-teal-800 mx-auto flex items-center justify-center">
             <Award className="w-8 h-8" />
@@ -564,6 +720,7 @@ export const AdaptiveAssessmentPage: React.FC = () => {
             </a>
           </div>
         </div>
+        ) : null
       )}
     </div>
   );

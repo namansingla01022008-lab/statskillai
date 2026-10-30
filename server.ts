@@ -25,6 +25,7 @@ import opportunitiesRouter from './server/routes/opportunities';
 import mentorshipRouter from './server/routes/mentorship';
 import analyticsRouter from './server/routes/analytics';
 import quizzesRouter from './server/routes/quizzes';
+import offlineRouter from './server/routes/offline';
 
 dotenv.config();
 
@@ -93,6 +94,7 @@ async function startServer() {
   app.use('/api/mentorship', mentorshipRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/quizzes', quizzesRouter);
+  app.use('/api/offline', offlineRouter);
 
   // Server-side Gemini generateContent
   app.post('/api/gemini/generate', async (req, res) => {

@@ -7,10 +7,12 @@ import { Role } from './types';
 import { Header } from './components/common/Header';
 import { Sidebar } from './components/common/Sidebar';
 import { FloatingAssistant } from './components/learner/FloatingAssistant';
+import { OfflineBanner } from './components/common/OfflineBanner';
 
 // Pages
 import { LoginPage } from './pages/LoginPage';
 import { AboutPage } from './pages/AboutPage';
+import { OfflinePage } from './pages/OfflinePage';
 
 // Learner Pages
 import { LearnerDashboard } from './pages/learner/LearnerDashboard';
@@ -110,6 +112,9 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       {/* Top Header */}
       <Header onToggleSidebar={() => setSidebarOpen(!sidebarOpen)} />
 
+      {/* Global Offline / Synchronization Banner */}
+      <OfflineBanner />
+
       {/* Body Area: Sidebar + Main Content */}
       <div className="flex-1 flex overflow-hidden">
         <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -138,6 +143,7 @@ export default function App() {
             {/* Public / Common Routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/about" element={<AboutPage />} />
+            <Route path="/offline" element={<OfflinePage />} />
 
             {/* Learner Routes */}
             <Route

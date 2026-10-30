@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
 import { GeminiService } from '../../services/geminiService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { QuestionRecord, QuizRecord } from '../../types';
 import {
   FileQuestion,
@@ -25,6 +26,7 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const QuizGeneratorPage: React.FC = () => {
   const { currentUser, t, language } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   // Top View Mode: 'generator' | 'history'
   const [viewMode, setViewMode] = useState<'generator' | 'history'>('generator');
@@ -288,6 +290,16 @@ Furthermore, in alignment with NEP-2020 and Mission Karmayogi, statistical inves
         </NoticeBanner>
       )}
 
+      {!isOnline && (
+        <NoticeBanner type="info" title="Offline Mode: AI Quiz Generator Paused">
+          AI Quiz Studio requires cloud generation to synthesize dynamic assessment questions. You can take the{' '}
+          <a href="#/assessment" className="underline font-bold">
+            Preloaded Offline Assessment
+          </a>{' '}
+          or review previously completed quizzes from the "Quiz History & Review" tab.
+        </NoticeBanner>
+      )}
+
       {viewMode === 'generator' && (
         <>
           {/* Generator Configuration Card */}
@@ -417,15 +429,16 @@ Furthermore, in alignment with NEP-2020 and Mission Karmayogi, statistical inves
         <div className="flex justify-end pt-2">
           <button
             onClick={handleGenerate}
-            disabled={loading}
-            className="px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-50 flex items-center gap-2 transition-colors"
+            disabled={loading || !isOnline}
+            title={!isOnline ? 'Quiz generation requires an online connection' : undefined}
+            className="px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-40 flex items-center gap-2 transition-colors"
           >
             {loading ? (
               <RotateCcw className="w-4 h-4 animate-spin" />
             ) : (
               <Sparkles className="w-4 h-4" />
             )}
-            <span>{loading ? 'Synthesizing Verified MCQs...' : t('generateQuiz')}</span>
+            <span>{loading ? 'Synthesizing Verified MCQs...' : !isOnline ? 'Online Only' : t('generateQuiz')}</span>
           </button>
         </div>
       </div>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Mentorship } from '../../types';
 import {
   Users,
@@ -16,6 +17,7 @@ import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const MentorDashboard: React.FC = () => {
   const { currentUser } = useApp();
+  const { isOnline } = useNetworkStatus();
 
   const [mentorships, setMentorships] = useState<Mentorship[]>(() =>
     StorageService.getMentorMentorships(currentUser.id)
@@ -24,6 +26,11 @@ export const MentorDashboard: React.FC = () => {
   const [notice, setNotice] = useState<string | null>(null);
 
   const handleUpdateStatus = (mentorshipId: string, status: Mentorship['status']) => {
+    if (!isOnline) {
+      setNotice('Mentor actions are disabled while offline. Please reconnect to update mentorship status.');
+      setTimeout(() => setNotice(null), 4000);
+      return;
+    }
     const item = mentorships.find((m) => m.id === mentorshipId);
     if (!item) return;
 
@@ -36,6 +43,12 @@ export const MentorDashboard: React.FC = () => {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {!isOnline && (
+        <NoticeBanner type="warning" title="Mentor Actions Disabled Offline">
+          You are currently in offline mode. Reviewing cached mentee profiles is permitted, but accepting, declining, or issuing directives requires an active internet connection.
+        </NoticeBanner>
+      )}
+
       {/* Top Header */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -128,13 +141,15 @@ export const MentorDashboard: React.FC = () => {
                       <>
                         <button
                           onClick={() => handleUpdateStatus(m.id, 'Accepted')}
-                          className="px-3.5 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 text-white font-bold transition-colors"
+                          disabled={!isOnline}
+                          className="px-3.5 py-1.5 rounded-md bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"
                         >
                           Accept Mentorship
                         </button>
                         <button
                           onClick={() => handleUpdateStatus(m.id, 'Declined')}
-                          className="px-3.5 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 text-slate-800 font-semibold transition-colors"
+                          disabled={!isOnline}
+                          className="px-3.5 py-1.5 rounded-md bg-slate-200 hover:bg-slate-300 disabled:opacity-50 disabled:cursor-not-allowed text-slate-800 font-semibold transition-colors"
                         >
                           Decline
                         </button>
@@ -144,7 +159,8 @@ export const MentorDashboard: React.FC = () => {
                     {m.status === 'Accepted' && (
                       <button
                         onClick={() => handleUpdateStatus(m.id, 'Completed')}
-                        className="px-3.5 py-1.5 rounded-md bg-teal-700 hover:bg-teal-800 text-white font-bold transition-colors"
+                        disabled={!isOnline}
+                        className="px-3.5 py-1.5 rounded-md bg-teal-700 hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold transition-colors"
                       >
                         Mark as Completed
                       </button>

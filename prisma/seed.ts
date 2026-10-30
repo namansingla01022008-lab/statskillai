@@ -382,6 +382,56 @@ export async function seedDatabase() {
     }
   }
 
+  // 11. Seed Initial Applications
+  console.log('[Seed] Seeding Initial Applications...');
+  const aarav = await prisma.user.findFirst({ where: { role: 'learner' } });
+  const opp1 = await prisma.opportunity.findFirst({ where: { id: 'opp-101' } });
+  const opp2 = await prisma.opportunity.findFirst({ where: { id: 'opp-104' } });
+
+  if (aarav && opp1) {
+    await prisma.application.upsert({
+      where: { id: 'app-init-1' },
+      update: {
+        status: 'Under review',
+        matchPercentage: 82,
+      },
+      create: {
+        id: 'app-init-1',
+        opportunityId: opp1.id,
+        opportunityTitle: opp1.title,
+        organisation: opp1.organisation,
+        userId: aarav.id,
+        userName: aarav.name,
+        userEmail: aarav.email,
+        status: 'Under review',
+        matchPercentage: 82,
+        notes: 'Submitted resume and SWAYAM certification verification ID.',
+      },
+    });
+  }
+
+  if (aarav && opp2) {
+    await prisma.application.upsert({
+      where: { id: 'app-init-2' },
+      update: {
+        status: 'Submitted',
+        matchPercentage: 78,
+      },
+      create: {
+        id: 'app-init-2',
+        opportunityId: opp2.id,
+        opportunityTitle: opp2.title,
+        organisation: opp2.organisation,
+        userId: aarav.id,
+        userName: aarav.name,
+        userEmail: aarav.email,
+        status: 'Submitted',
+        matchPercentage: 78,
+        notes: 'Enclosed provisional transcript and assessment scorecard.',
+      },
+    });
+  }
+
   console.log('[Seed] Database successfully seeded with factory data!');
 }
 

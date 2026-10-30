@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { StorageService } from '../../services/storageService';
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Course, Opportunity, DomainType, OpportunityType, ProficiencyLevel } from '../../types';
 import { DOMAINS } from '../../constants/competency';
 import {
@@ -15,6 +16,7 @@ import {
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const AdminCatalogPage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const [activeTab, setActiveTab] = useState<'courses' | 'opportunities'>('courses');
   const [courses, setCourses] = useState<Course[]>(() => StorageService.getCourses());
   const [opportunities, setOpportunities] = useState<Opportunity[]>(() => StorageService.getOpportunities());
@@ -105,6 +107,12 @@ export const AdminCatalogPage: React.FC = () => {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      {!isOnline && (
+        <NoticeBanner type="warning" title="Catalog Modification Disabled Offline">
+          You are viewing cached catalog entries. Creating, editing, or deleting courses and opportunities requires an active network connection.
+        </NoticeBanner>
+      )}
+
       {/* Header */}
       <div className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
@@ -119,6 +127,7 @@ export const AdminCatalogPage: React.FC = () => {
         <div className="flex items-center gap-2">
           {activeTab === 'courses' ? (
             <button
+              disabled={!isOnline}
               onClick={() => {
                 setCourseForm({
                   id: '',
@@ -135,13 +144,14 @@ export const AdminCatalogPage: React.FC = () => {
                 setCourseSkillsInput('');
                 setShowCourseModal(true);
               }}
-              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5"
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-xs font-bold flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>Add Course</span>
             </button>
           ) : (
             <button
+              disabled={!isOnline}
               onClick={() => {
                 setOppForm({
                   id: '',
@@ -160,7 +170,7 @@ export const AdminCatalogPage: React.FC = () => {
                 setOppSkillsInput('');
                 setShowOppModal(true);
               }}
-              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 text-white rounded-md text-xs font-bold flex items-center gap-1.5"
+              className="px-4 py-2 bg-teal-700 hover:bg-teal-800 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-md text-xs font-bold flex items-center gap-1.5"
             >
               <Plus className="w-4 h-4" />
               <span>Add Opportunity</span>

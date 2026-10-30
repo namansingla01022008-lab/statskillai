@@ -264,11 +264,48 @@ The application will start locally at `http://localhost:3000`.
 
 ## 🧪 Automated Testing & Verification
 
-StatSkillAI includes an end-to-end smoke test suite that verifies database connectivity, cryptographic hashing, JWT claims, closed-loop gap analysis, mentor directive preservation, and institutional analytics:
+StatSkillAI includes comprehensive verification suites covering cryptographic security, schema integrity, and offline synchronization:
 
 ```bash
+# Verify offline mode, zero-trust server re-scoring, preloaded sanitization & tamper checks
+npx tsx tests/offline-mode-test.ts
+
+# Platform smoke tests (requires active PostgreSQL instance)
 npx tsx tests/smoke-test.ts
 ```
+
+---
+
+## 📶 Offline Mode & Resilient Architecture (PWA)
+
+StatSkillAI is engineered for intermittent and unreliable connectivity (supporting **2 to 3 days fully offline** without page crashes or data loss). Built using Progressive Web App standards (`vite-plugin-pwa` + Workbox) and high-performance IndexedDB client storage (`idb`), learners in remote or low-bandwidth environments can continue their educational progress seamlessly.
+
+### Client Storage & Two-Store Model
+* **`cache` Store**: Read-only local snapshots of display name/role, active learning path, latest competency gap diagnosis, course catalog metadata, and preloaded assessment question sets. All cached records carry a `cachedAt` timestamp and automatically expire after **7 days**.
+* **`outbox` Store**: An append-only persistent queue for offline mutations (`STEP_COMPLETE` and `ASSESSMENT_SUBMIT`). Synced in FIFO order upon reconnection.
+
+### Feature Availability Matrix
+
+| Feature | Offline Status | Behavioral Details |
+| :--- | :---: | :--- |
+| **App Shell & Cached Pages** | ✅ Available | Service worker precaches HTML/JS/CSS assets. Routes show a "Last updated" timestamp. |
+| **Learning Path Milestones** | ✅ Available | Learners can mark steps as completed offline. Actions are queued as `STEP_COMPLETE` mutations in the IndexedDB outbox. |
+| **Offline Diagnostic Assessment** | ✅ Available | Preloaded questions (text and choices only) can be attempted offline. Results display: *"Answers saved. Results will be available after you reconnect."* |
+| **Course & Opportunity Catalog** | ✅ Available (Read-Only) | Browse cached government and university courses and career listings. |
+| **AI Companion & Quiz Generation** | 🚫 Disabled | Google Gemini generative endpoints require cloud connectivity. UI displays a helpful notice and points to preloaded assessments. |
+| **Gap Analysis AI Recalculation** | 🚫 Disabled | Server-authoritative gap diagnosis is recomputed upon reconnection and mutation sync. |
+| **Opportunity Applications** | 🚫 Disabled | Sovereign job and fellowship applications require real-time verification and are disabled offline. |
+| **Mentor Directives & Approvals** | 🚫 Disabled | Mentor workspace allows read-only evaluation of cached mentee profiles; directive transmission and course recommendations require connectivity. |
+| **Live Mentor Messaging** | ⏸️ Paused | WebSocket connection status shows as disconnected. Message input is paused to prevent stale or duplicated sends. |
+| **Admin Operations** | 🚫 Disabled | Institutional catalog governance and mentor verification toggles are disabled offline with clear warning banners. |
+
+### Zero-Trust Offline Assessment Security
+1. **Zero Client Leakage**: The preloaded question endpoint (`GET /api/offline/questions`) strips correct answers, answer indices, answer hashes, and explanations. Only question text and option strings are ever transmitted or cached.
+2. **Server-Authoritative Re-Scoring**: Offline attempts are submitted to `POST /api/offline/sync` with answer choices and timestamps. The server evaluates each question against its authoritative answer key in `server/services/questionBank.ts`. **The server never trusts or accepts client-provided scores.**
+3. **Anti-Tamper Sanity Checks**: The backend rejects attempts with future submission timestamps, attempts older than 7 days, implausible speeds (<1 second average per question), or unrecognized question IDs.
+4. **Strict Idempotency**: Each mutation carries a unique UUID `mutationId` and `attemptId`. Replayed requests return the original server-calculated score without duplicate database records or inflated scores.
+5. **Monotonicity**: Milestone step completions are strictly monotonic (`Completed` is never reverted to an earlier state by stale offline clients).
+6. **Zero Sensitive Data Storage**: Authentication JWT tokens and passwords are **never** stored in IndexedDB. On user logout or upon detecting an account switch, the entire IndexedDB database and service worker Cache Storage are immediately purged.
 
 ---
 
