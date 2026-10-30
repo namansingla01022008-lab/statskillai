@@ -18,6 +18,9 @@ import {
   HelpCircle,
   X,
   Sparkles,
+  Trophy,
+  ShoppingBag,
+  Award,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -33,6 +36,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Learner nav items
   const learnerNav = [
     { label: t('dashboard'), path: '/dashboard', icon: LayoutDashboard },
+    { label: 'Rewards & XP', path: '/rewards', icon: Trophy },
+    { label: 'Rewards Store', path: '/store', icon: ShoppingBag },
+    { label: 'Certificates', path: '/certificates', icon: Award },
     { label: t('profile'), path: '/profile', icon: UserCheck },
     { label: t('assessment'), path: '/assessment', icon: BrainCircuit },
     { label: t('gapAnalysis'), path: '/gap-analysis', icon: TrendingDown },
@@ -50,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Admin nav items
   const adminNav = [
     { label: t('adminAnalytics'), path: '/admin/analytics', icon: BarChart3 },
+    { label: 'Rewards Mgmt', path: '/admin/rewards', icon: Trophy },
     { label: t('adminCatalog'), path: '/admin/catalog', icon: BookOpenCheck },
     { label: t('adminApplicants'), path: '/admin/applicants', icon: UserPlus },
     { label: t('adminMentors'), path: '/admin/mentors', icon: ShieldCheck },

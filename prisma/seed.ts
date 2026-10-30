@@ -382,6 +382,7 @@ export async function seedDatabase() {
     }
   }
 
+<<<<<<< HEAD
   // 11. Seed Initial Applications
   console.log('[Seed] Seeding Initial Applications...');
   const aarav = await prisma.user.findFirst({ where: { role: 'learner' } });
@@ -406,10 +407,40 @@ export async function seedDatabase() {
         status: 'Under review',
         matchPercentage: 82,
         notes: 'Submitted resume and SWAYAM certification verification ID.',
+=======
+  // 11. Seed Reward Rules
+  console.log('[Seed] Seeding Reward Rules...');
+  const DEFAULT_RULES = [
+    { eventType: 'ASSESSMENT_PASS', label: 'Domain Assessment Passed', xpAmount: 10, description: 'Pass an objective psychometric competency assessment (≥60%)' },
+    { eventType: 'QUIZ_PASS', label: 'AI Document Quiz Passed', xpAmount: 10, description: 'Pass an AI-generated document evaluation quiz (≥60%)' },
+    { eventType: 'STEP_COMPLETE', label: 'Learning Step Completed', xpAmount: 10, description: 'Complete a verified competency milestone in your learning pathway' },
+    { eventType: 'COURSE_COMPLETE', label: 'Full Course Completed', xpAmount: 100, description: 'Graduate from an accredited national training course' },
+    { eventType: 'PATH_COMPLETE', label: 'Learning Pathway Completed', xpAmount: 150, description: 'Complete all sequenced steps in a personalized learning pathway' },
+    { eventType: 'CERT_APPROVED', label: 'Verified Certificate', xpAmount: 200, description: 'Submit an official course certificate verified by an administrator' },
+    { eventType: 'STREAK_7DAY', label: '7-Day Learning Streak', xpAmount: 50, description: 'Maintain consistent learning activity across 7 active days' },
+  ];
+
+  for (const rule of DEFAULT_RULES) {
+    await prisma.rewardRule.upsert({
+      where: { eventType: rule.eventType },
+      update: {
+        label: rule.label,
+        xpAmount: rule.xpAmount,
+        description: rule.description,
+        isActive: true,
+      },
+      create: {
+        eventType: rule.eventType,
+        label: rule.label,
+        xpAmount: rule.xpAmount,
+        description: rule.description,
+        isActive: true,
+>>>>>>> f5acb559fc19462e53255d9a0d777d74c98347d3
       },
     });
   }
 
+<<<<<<< HEAD
   if (aarav && opp2) {
     await prisma.application.upsert({
       where: { id: 'app-init-2' },
@@ -432,6 +463,166 @@ export async function seedDatabase() {
     });
   }
 
+=======
+  // 12. Seed Demo Rewards Catalogue
+  console.log('[Seed] Seeding Reward Catalogue...');
+  const DEMO_REWARDS = [
+    {
+      id: 'reward-amazon-50',
+      name: 'Amazon ₹50 E-Gift Card',
+      brand: 'Amazon',
+      category: 'VOUCHER',
+      description: 'Instant digital gift voucher redeemable on Amazon.in across all eligible items and book categories.',
+      xpCost: 500,
+      stock: 50,
+      isActive: true,
+      imageUrl: 'https://images.unsplash.com/photo-1526304640581-d334cdbbf45e?w=500&auto=format&fit=crop&q=60',
+    },
+    {
+      id: 'reward-swiggy-100',
+      name: 'Swiggy ₹100 Food Voucher',
+      brand: 'Swiggy',
+      category: 'VOUCHER',
+      description: 'Digital food ordering voucher valid across all top-rated restaurants on Swiggy Gourmet and Instamart.',
+      xpCost: 900,
+      stock: 40,
+      isActive: true,
+      imageUrl: 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&auto=format&fit=crop&q=60',
+    },
+    {
+      id: 'reward-zomato-100',
+      name: 'Zomato ₹100 Dining Voucher',
+      brand: 'Zomato',
+      category: 'VOUCHER',
+      description: 'Instant electronic gift voucher for culinary delights, dining out and quick deliveries on Zomato.',
+      xpCost: 900,
+      stock: 40,
+      isActive: true,
+      imageUrl: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=500&auto=format&fit=crop&q=60',
+    },
+    {
+      id: 'reward-python-pack',
+      name: 'Advanced Python for Data Analytics Pass',
+      brand: 'StatSkill Partner',
+      category: 'COURSE_ACCESS',
+      description: 'Exclusive 3-month access to comprehensive hands-on statistical programming labs and interactive datasets.',
+      xpCost: 1200,
+      stock: -1,
+      isActive: true,
+      imageUrl: 'https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=500&auto=format&fit=crop&q=60',
+    },
+    {
+      id: 'reward-karmayogi-sub',
+      name: 'National Learning Resources Annual Pass',
+      brand: 'iGOT Partner',
+      category: 'SUBSCRIPTION',
+      description: 'Annual premium pass providing verified course completion badges and downloadable research journals.',
+      xpCost: 1500,
+      stock: 25,
+      isActive: true,
+      imageUrl: 'https://images.unsplash.com/photo-1497633762265-9d179a990aa6?w=500&auto=format&fit=crop&q=60',
+    },
+  ];
+
+  for (const reward of DEMO_REWARDS) {
+    await prisma.reward.upsert({
+      where: { id: reward.id },
+      update: {
+        name: reward.name,
+        brand: reward.brand,
+        category: reward.category,
+        description: reward.description,
+        xpCost: reward.xpCost,
+        stock: reward.stock,
+        isActive: reward.isActive,
+        imageUrl: reward.imageUrl,
+      },
+      create: reward,
+    });
+  }
+
+  // 13. Seed Badges
+  console.log('[Seed] Seeding Badges...');
+  const SEED_BADGES = [
+    { key: 'FIRST_STEP', name: 'First Milestone', description: 'Completed your first learning module step.', iconName: 'Footprints', tier: 'BRONZE', xpBonus: 15 },
+    { key: 'FIRST_COURSE', name: 'Course Graduate', description: 'Successfully completed a full certified training course.', iconName: 'GraduationCap', tier: 'SILVER', xpBonus: 50 },
+    { key: 'QUIZ_MASTER', name: 'Quiz Master', description: 'Passed 3 or more competency evaluations or AI quizzes.', iconName: 'BrainCircuit', tier: 'SILVER', xpBonus: 30 },
+    { key: 'CERT_CHAMPION', name: 'Certificate Champion', description: 'Submitted and verified an official certificate.', iconName: 'Award', tier: 'GOLD', xpBonus: 75 },
+    { key: 'PATH_EXPLORER', name: 'Pathway Conqueror', description: 'Completed an entire personalized skill progression pathway.', iconName: 'Compass', tier: 'GOLD', xpBonus: 100 },
+    { key: 'CONSISTENT_LEARNER', name: '7-Day Streak', description: 'Maintained 7 consecutive or milestone learning days.', iconName: 'Flame', tier: 'SILVER', xpBonus: 50 },
+    { key: 'SKILL_CHAMPION', name: 'XP Titan', description: 'Accumulated over 500 total XP in the StatSkillAI reward ledger.', iconName: 'Trophy', tier: 'PLATINUM', xpBonus: 150 },
+  ];
+
+  for (const badge of SEED_BADGES) {
+    await prisma.badge.upsert({
+      where: { key: badge.key },
+      update: badge,
+      create: badge,
+    });
+  }
+
+  // 14. Seed Initial Balances & Streaks for Learners
+  console.log('[Seed] Seeding Learner Balances & Streaks...');
+  const DEMO_BALANCES: Record<string, { totalEarned: number; balance: number; totalRedeemed: number; streak: number }> = {
+    'user-student': { totalEarned: 620, balance: 520, totalRedeemed: 100, streak: 5 },
+    'user-gov': { totalEarned: 480, balance: 480, totalRedeemed: 0, streak: 3 },
+    'user-private': { totalEarned: 350, balance: 350, totalRedeemed: 0, streak: 2 },
+  };
+
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  for (const [userId, stats] of Object.entries(DEMO_BALANCES)) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) continue;
+
+    await prisma.rewardBalance.upsert({
+      where: { userId },
+      update: {
+        totalEarned: stats.totalEarned,
+        balance: stats.balance,
+        totalRedeemed: stats.totalRedeemed,
+      },
+      create: {
+        userId,
+        totalEarned: stats.totalEarned,
+        balance: stats.balance,
+        totalRedeemed: stats.totalRedeemed,
+      },
+    });
+
+    await prisma.learnerStreak.upsert({
+      where: { userId },
+      update: {
+        currentStreak: stats.streak,
+        longestStreak: Math.max(stats.streak, 7),
+        totalActiveDays: stats.streak + 4,
+        lastActivityDate: todayStr,
+      },
+      create: {
+        userId,
+        currentStreak: stats.streak,
+        longestStreak: Math.max(stats.streak, 7),
+        totalActiveDays: stats.streak + 4,
+        lastActivityDate: todayStr,
+      },
+    });
+
+    // Award default badges
+    await prisma.userBadge.upsert({
+      where: { userId_badgeKey: { userId, badgeKey: 'FIRST_STEP' } },
+      update: {},
+      create: { userId, badgeKey: 'FIRST_STEP' },
+    });
+    if (stats.totalEarned >= 500) {
+      await prisma.userBadge.upsert({
+        where: { userId_badgeKey: { userId, badgeKey: 'SKILL_CHAMPION' } },
+        update: {},
+        create: { userId, badgeKey: 'SKILL_CHAMPION' },
+      });
+    }
+  }
+
+>>>>>>> f5acb559fc19462e53255d9a0d777d74c98347d3
   console.log('[Seed] Database successfully seeded with factory data!');
 }
 

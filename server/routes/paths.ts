@@ -2,6 +2,8 @@ import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { recalculateUserGapAnalysis } from './assessments';
+import { awardXP } from '../services/rewardEngine';
+import { recordLearnerActivity } from '../services/streakEngine';
 
 const router = Router();
 
@@ -149,39 +151,61 @@ router.patch('/step-status', authenticate, requireRole(['learner']), async (req:
     });
 
     // Closed-loop competency feedback: If newly marked as Completed, award +3 competency points to that domain
-    if (status === 'Completed' && previousStatus !== 'Completed' && step.domain) {
-      const latestAttempt = await prisma.assessmentAttempt.findFirst({
-        where: { userId, domain: step.domain, completed: true },
-        orderBy: { date: 'desc' },
-      });
+    if (status === 'Completed' && previousStatus !== 'Completed') {
+      // 1. Verify associated course if courseId is present
+      if (step.courseId) {
+        const courseExists = await prisma.course.findUnique({ where: { id: step.courseId } });
+        if (!courseExists) {
+          console.warn(`Step ${step.id} has invalid courseId ${step.courseId}, continuing milestone check.`);
+        }
+      }
 
-      const currentScore = latestAttempt ? latestAttempt.score : 65;
-      const boostedScore = Math.min(98, currentScore + 3);
+      // 2. Competency Score Boost (strictly preserved existing functionality)
+      if (step.domain) {
+        const latestAttempt = await prisma.assessmentAttempt.findFirst({
+          where: { userId, domain: step.domain, completed: true },
+          orderBy: { date: 'desc' },
+        });
 
-      await prisma.assessmentAttempt.create({
-        data: {
-          userId,
-          domain: step.domain,
-          score: boostedScore,
-          earnedWeight: 10,
-          maxWeight: 10,
-          previousScore: currentScore,
-          questions: JSON.stringify([{
-            id: `milestone-${Date.now()}`,
-            question: `Completed competency module: ${step.title}`,
+        const currentScore = latestAttempt ? latestAttempt.score : 65;
+        const boostedScore = Math.min(98, currentScore + 3);
+
+        await prisma.assessmentAttempt.create({
+          data: {
+            userId,
             domain: step.domain,
-            difficulty: 'Medium',
-            options: ['Completed verified training milestone'],
-            correctIndex: 0,
-            explanation: 'Verified progress milestone from personalized learning pathway.',
-          }]),
-          userAnswers: JSON.stringify([0]),
-          completed: true,
-        },
-      });
+            score: boostedScore,
+            earnedWeight: 10,
+            maxWeight: 10,
+            previousScore: currentScore,
+            questions: JSON.stringify([{
+              id: `milestone-${Date.now()}`,
+              question: `Completed competency module: ${step.title}`,
+              domain: step.domain,
+              difficulty: 'Medium',
+              options: ['Completed verified training milestone'],
+              correctIndex: 0,
+              explanation: 'Verified progress milestone from personalized learning pathway.',
+            }]),
+            userAnswers: JSON.stringify([0]),
+            completed: true,
+          },
+        });
 
-      // Automatically recalculate gaps and domain benchmarks
-      await recalculateUserGapAnalysis(userId);
+        // Automatically recalculate gaps and domain benchmarks
+        await recalculateUserGapAnalysis(userId);
+      }
+
+      // 3. Reward Engine XP Hook & Activity Streak Hook (Independent System)
+      try {
+        recordLearnerActivity(userId).catch(() => {});
+        await awardXP(userId, 'STEP_COMPLETE', step.id, {
+          idempotencyKey: `step-done:${userId}:${step.id}`,
+          description: `Completed module: ${step.title}`,
+        });
+      } catch (rewardErr) {
+        console.warn('Reward processing caught safely:', rewardErr);
+      }
     }
 
     // Recompute path progress
@@ -191,6 +215,18 @@ router.patch('/step-status', authenticate, requireRole(['learner']), async (req:
     const completedCount = allSteps.filter((s) => s.status === 'Completed').length;
     const progressPercent = allSteps.length ? Math.round((completedCount / allSteps.length) * 100) : 0;
     const isCompleted = allSteps.length > 0 && completedCount === allSteps.length;
+
+    // Check if path became newly completed
+    if (isCompleted && !step.learningPath.isCompleted) {
+      try {
+        await awardXP(userId, 'PATH_COMPLETE', step.learningPathId, {
+          idempotencyKey: `path-done:${userId}:${step.learningPathId}`,
+          description: `Completed full competency pathway: ${step.learningPath.title}`,
+        });
+      } catch (pathRewardErr) {
+        console.warn('Path complete reward error:', pathRewardErr);
+      }
+    }
 
     const updatedPath = await prisma.learningPath.update({
       where: { id: step.learningPathId },

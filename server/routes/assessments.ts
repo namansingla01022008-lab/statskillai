@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import { awardXP } from '../services/rewardEngine';
+import { recordLearnerActivity } from '../services/streakEngine';
 
 const router = Router();
 
@@ -182,6 +184,20 @@ router.post('/submit', authenticate, requireRole(['learner']), async (req: Authe
     // Automatically trigger closed-loop diagnostic recalculation
     const updatedGapAnalysis = await recalculateUserGapAnalysis(userId);
 
+    // Non-blocking Reward Engine & Streak Hooks
+    let rewardResult: any = null;
+    try {
+      recordLearnerActivity(userId).catch(() => {});
+      if (attempt.score >= 60) {
+        rewardResult = await awardXP(userId, 'ASSESSMENT_PASS', attempt.id, {
+          idempotencyKey: `assess-pass:${userId}:${attempt.id}`,
+          description: `Passed ${domain} Competency Assessment (${attempt.score}%)`,
+        });
+      }
+    } catch (rewardErr) {
+      console.warn('Reward processing caught safely:', rewardErr);
+    }
+
     res.status(201).json({
       success: true,
       attempt: {
@@ -190,6 +206,7 @@ router.post('/submit', authenticate, requireRole(['learner']), async (req: Authe
         userAnswers: JSON.parse(attempt.userAnswers),
       },
       gapAnalysis: updatedGapAnalysis,
+      reward: rewardResult,
     });
   } catch (err: any) {
     console.error('Submit attempt error:', err);

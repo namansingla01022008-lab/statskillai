@@ -1,6 +1,8 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
+import { awardXP } from '../services/rewardEngine';
+import { recordLearnerActivity } from '../services/streakEngine';
 
 const router = Router();
 
@@ -46,6 +48,21 @@ router.post('/', authenticate, requireRole(['learner']), async (req: Authenticat
       },
     });
 
+    // Non-blocking Reward Engine & Streak Hook
+    let rewardResult: any = null;
+    try {
+      recordLearnerActivity(userId).catch(() => {});
+      const passRate = quiz.totalQuestions > 0 ? quiz.score / quiz.totalQuestions : 0;
+      if (passRate >= 0.6) {
+        rewardResult = await awardXP(userId, 'QUIZ_PASS', quiz.id, {
+          idempotencyKey: `quiz-pass:${userId}:${quiz.id}`,
+          description: `Passed AI Assessment Quiz: ${quiz.title} (${Math.round(passRate * 100)}%)`,
+        });
+      }
+    } catch (rewardErr) {
+      console.warn('Quiz reward processing caught safely:', rewardErr);
+    }
+
     res.status(201).json({
       success: true,
       quiz: {
@@ -53,6 +70,7 @@ router.post('/', authenticate, requireRole(['learner']), async (req: Authenticat
         questions: JSON.parse(quiz.questions),
         userAnswers: JSON.parse(quiz.userAnswers),
       },
+      reward: rewardResult,
     });
   } catch (err: any) {
     console.error('Save quiz error:', err);

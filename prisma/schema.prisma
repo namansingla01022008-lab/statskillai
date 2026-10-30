@@ -281,3 +281,167 @@ model AppSettings {
   highContrast Boolean @default(false)
   fontSize     String  @default("default")
 }
+
+model RewardRule {
+  id          String   @id @default(uuid())
+  eventType   String   @unique // ASSESSMENT_PASS | QUIZ_PASS | STEP_COMPLETE | PATH_COMPLETE | CERT_APPROVED | STREAK_7DAY
+  label       String
+  xpAmount    Int
+  isActive    Boolean  @default(true)
+  dailyCap    Int?
+  totalCap    Int?
+  description String   @default("")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RewardTransaction {
+  id             String   @id @default(uuid())
+  userId         String
+  type           String   // EARN | DEDUCT | ADJUST | REFUND
+  xpAmount       Int
+  eventType      String?
+  referenceId    String?
+  idempotencyKey String   @unique
+  description    String   @default("")
+  createdAt      DateTime @default(now())
+  processedVia   String   @default("DIRECT") // DIRECT | OUTBOX
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([createdAt])
+}
+
+model RewardBalance {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  totalEarned   Int      @default(0)
+  totalRedeemed Int      @default(0)
+  balance       Int      @default(0)
+  updatedAt     DateTime @updatedAt
+
+  @@index([balance])
+}
+
+model RewardOutbox {
+  id          String    @id @default(uuid())
+  userId      String
+  eventType   String
+  referenceId String
+  xpAmount    Int
+  status      String    @default("PENDING") // PENDING | PROCESSING | DONE | FAILED
+  retryCount  Int       @default(0)
+  lastError   String?
+  scheduledAt DateTime  @default(now())
+  processedAt DateTime?
+
+  @@index([status, scheduledAt])
+  @@index([userId])
+}
+
+model LearnerStreak {
+  id                  String    @id @default(uuid())
+  userId              String    @unique
+  currentStreak       Int       @default(0)
+  lastActivityDate    String    @default("") // YYYY-MM-DD in UTC
+  longestStreak       Int       @default(0)
+  totalActiveDays     Int       @default(0)
+  lastStreakAwardedAt DateTime?
+
+  @@index([userId])
+}
+
+model Certificate {
+  id              String    @id @default(uuid())
+  userId          String
+  courseName      String
+  provider        String    // NPTEL | SWAYAM | Coursera | iGOT | Other
+  certId          String
+  verificationUrl String
+  fileKey         String?
+  status          String    @default("PENDING") // PENDING | UNDER_REVIEW | APPROVED | REJECTED
+  adminNote       String?
+  rejectionReason String?
+  verifiedAt      DateTime?
+  submittedAt     DateTime  @default(now())
+  xpAwarded       Boolean   @default(false)
+
+  @@unique([userId, provider, certId])
+  @@index([userId])
+  @@index([status])
+}
+
+model Reward {
+  id             String       @id @default(uuid())
+  name           String
+  brand          String
+  category       String       // VOUCHER | COURSE_ACCESS | SUBSCRIPTION | OTHER
+  description    String       @default("")
+  xpCost         Int
+  stock          Int          @default(-1) // -1 = unlimited
+  isActive       Boolean      @default(true)
+  imageUrl       String?
+  requiresReview Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  redemptions    Redemption[]
+
+  @@index([isActive])
+  @@index([category])
+}
+
+model Redemption {
+  id             String    @id @default(uuid())
+  userId         String
+  rewardId       String
+  reward         Reward    @relation(fields: [rewardId], references: [id], onDelete: Cascade)
+  xpSpent        Int
+  status         String    @default("PENDING") // PENDING | PROCESSING | SUCCESS | FAILED | CANCELLED | REFUNDED
+  voucherCode    String?
+  failureReason  String?
+  idempotencyKey String    @unique
+  refundTxId     String?
+  createdAt      DateTime  @default(now())
+  completedAt    DateTime?
+
+  @@index([userId])
+  @@index([status])
+  @@index([rewardId])
+}
+
+model Badge {
+  id          String      @id @default(uuid())
+  key         String      @unique // e.g. "FIRST_COURSE", "CERT_CHAMPION"
+  name        String
+  description String
+  iconName    String
+  xpBonus     Int         @default(0)
+  tier        String      @default("BRONZE") // BRONZE | SILVER | GOLD | PLATINUM
+  userBadges  UserBadge[]
+}
+
+model UserBadge {
+  id       String   @id @default(uuid())
+  userId   String
+  badgeKey String
+  badge    Badge    @relation(fields: [badgeKey], references: [key], onDelete: Cascade)
+  earnedAt DateTime @default(now())
+
+  @@unique([userId, badgeKey])
+  @@index([userId])
+}
+
+model RewardAuditLog {
+  id           String   @id @default(uuid())
+  actorId      String
+  actorRole    String
+  targetUserId String?
+  action       String   // CERT_APPROVE | CERT_REJECT | MANUAL_ADJUST | REWARD_CREATE | etc.
+  detail       String   // JSON string with before/after and reason
+  createdAt    DateTime @default(now())
+
+  @@index([actorId])
+  @@index([targetUserId])
+  @@index([createdAt])
+}
+
