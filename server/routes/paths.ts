@@ -83,19 +83,42 @@ router.post('/save', authenticate, requireRole(['learner']), async (req: Authent
     if (incomingSteps.length > 0) {
       for (let i = 0; i < incomingSteps.length; i++) {
         const s = incomingSteps[i];
+        // Server-side courseId validation against verified database catalog
+        let verifiedCourseId: string | null = null;
+        let finalTitle = s.title;
+        let finalSource = s.source || 'SWAYAM';
+        let finalDomain = s.domain || 'Statistical';
+
+        if (s.courseId) {
+          const verifiedCourse = await prisma.course.findFirst({
+            where: { id: s.courseId, status: 'verified' },
+          });
+
+          if (verifiedCourse) {
+            verifiedCourseId = verifiedCourse.id;
+            // Always overwrite with database title and provider
+            finalTitle = verifiedCourse.title;
+            finalSource = verifiedCourse.provider;
+            finalDomain = verifiedCourse.domain;
+          } else {
+            console.warn(`[Path Save] Discarded unknown or unverified courseId "${s.courseId}".`);
+            verifiedCourseId = null;
+          }
+        }
+
         await prisma.learningStep.create({
           data: {
             learningPathId: savedPath.id,
-            title: s.title,
-            domain: s.domain,
+            title: finalTitle,
+            domain: finalDomain,
             type: s.type || 'Course',
             estimatedDuration: s.estimatedDuration || '4 Weeks',
-            source: s.source || 'SWAYAM',
+            source: finalSource,
             rationale: s.rationale || '',
             status: s.status || 'Not started',
             isAiSuggested: Boolean(s.isAiSuggested),
             isMentorRecommended: Boolean(s.isMentorRecommended),
-            courseId: s.courseId || null,
+            courseId: verifiedCourseId,
             orderIndex: i,
           },
         });
@@ -238,6 +261,156 @@ router.patch('/step-status', authenticate, requireRole(['learner']), async (req:
   } catch (err: any) {
     console.error('Update step status error:', err);
     res.status(500).json({ error: 'Failed to update step status.' });
+  }
+});
+
+
+// POST Recommend verified courses via Gemini (Strict Candidate Subset & Server Verification)
+router.post('/recommend-courses', authenticate, requireRole(['learner']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { domain, topic, level } = req.body;
+
+    // 1. Backend queries verified candidates filtered by learner criteria
+    const where: any = { status: 'verified' };
+    if (domain) where.domain = domain;
+    if (topic) where.topic = topic;
+    if (level) where.level = level;
+
+    const verifiedCandidates = await prisma.course.findMany({
+      where,
+      select: {
+        id: true,
+        title: true,
+        topic: true,
+        level: true,
+        domain: true,
+        provider: true,
+        sourceUrl: true,
+        sourceName: true,
+        duration: true,
+        lastVerifiedAt: true,
+      },
+    });
+
+    if (verifiedCandidates.length === 0) {
+      return res.json({
+        success: true,
+        recommendations: [],
+        message: 'No verified recommendation available.',
+      });
+    }
+
+    const candidateMap = new Map(verifiedCandidates.map((c) => [c.id, c]));
+
+    // 2. Send ONLY (id, title, topic, level) to Gemini
+    const minimalCandidates = verifiedCandidates.map((c) => ({
+      id: c.id,
+      title: c.title,
+      topic: c.topic,
+      level: c.level,
+    }));
+
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (apiKey) {
+      try {
+        const { GoogleGenAI, Type } = await import('@google/genai');
+        const ai = new GoogleGenAI({ apiKey });
+        const prompt = `Select the most suitable courses for a learner seeking development in ${domain || 'Statistics'}.
+Available Verified Candidates:
+${JSON.stringify(minimalCandidates, null, 2)}
+
+CRITICAL INSTRUCTIONS:
+- You may ONLY select course IDs from the provided candidate list.
+- You are strictly FORBIDDEN from generating course names, URLs, institutions, or job postings.
+- Return ONLY valid candidate IDs with a concise reason for each.`;
+
+        const responseSchema = {
+          type: Type.OBJECT,
+          properties: {
+            recommendations: {
+              type: Type.ARRAY,
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  id: { type: Type.STRING },
+                  reason: { type: Type.STRING },
+                },
+                required: ['id', 'reason'],
+              },
+            },
+          },
+          required: ['recommendations'],
+        };
+
+        const result = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents: prompt,
+          config: {
+            responseMimeType: 'application/json',
+            responseSchema,
+          },
+        });
+
+        const parsed = JSON.parse(result.text || '{}');
+        const rawRecs = Array.isArray(parsed.recommendations) ? parsed.recommendations : [];
+
+        // 3. Server verifies every returned ID exists in the candidate set, discards unknown IDs,
+        // and renders titles, links, and details from the database only, never from Gemini text.
+        const verifiedRecs: any[] = [];
+        for (const rec of rawRecs) {
+          const dbRecord = candidateMap.get(rec.id);
+          if (dbRecord) {
+            verifiedRecs.push({
+              id: dbRecord.id,
+              title: dbRecord.title,
+              topic: dbRecord.topic,
+              level: dbRecord.level,
+              domain: dbRecord.domain,
+              provider: dbRecord.provider,
+              sourceUrl: dbRecord.sourceUrl,
+              sourceName: dbRecord.sourceName,
+              duration: dbRecord.duration,
+              lastVerifiedAt: dbRecord.lastVerifiedAt,
+              reason: rec.reason,
+            });
+          } else {
+            console.warn(`[Gemini Validation] Discarded unknown or fabricated ID: "${rec.id}"`);
+          }
+        }
+
+        if (verifiedRecs.length === 0) {
+          return res.json({
+            success: true,
+            recommendations: [],
+            message: 'No verified recommendation available.',
+          });
+        }
+
+        return res.json({ success: true, recommendations: verifiedRecs });
+      } catch (aiErr) {
+        console.warn('Gemini recommendation call caught, falling back to database selection:', aiErr);
+      }
+    }
+
+    // Deterministic fallback (offline or fallback required)
+    const fallbackRecs = verifiedCandidates.slice(0, 3).map((c) => ({
+      id: c.id,
+      title: c.title,
+      topic: c.topic,
+      level: c.level,
+      domain: c.domain,
+      provider: c.provider,
+      sourceUrl: c.sourceUrl,
+      sourceName: c.sourceName,
+      duration: c.duration,
+      lastVerifiedAt: c.lastVerifiedAt,
+      reason: `Verified official course in ${c.topic} matching your target competency benchmark.`,
+    }));
+
+    return res.json({ success: true, recommendations: fallbackRecs });
+  } catch (err: any) {
+    console.error('Recommend courses error:', err);
+    res.status(500).json({ error: 'Failed to recommend courses.' });
   }
 });
 

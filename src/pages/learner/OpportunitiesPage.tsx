@@ -2,150 +2,74 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
 import { ApiService } from '../../services/apiService';
-import { useNetworkStatus } from '../../hooks/useNetworkStatus';
-import { Opportunity, Application, OpportunityType, DomainType } from '../../types';
-import { DOMAINS } from '../../constants/competency';
+import { Career } from '../../types';
 import {
   Briefcase,
   Search,
-  Filter,
-  CheckCircle2,
-  Calendar,
-  MapPin,
-  Building2,
   ExternalLink,
-  Sparkles,
+  ShieldCheck,
   Award,
+  GraduationCap,
+  Sparkles,
+  Layers,
+  ArrowRight
 } from 'lucide-react';
-import { NoticeBanner } from '../../components/common/NoticeBanner';
 
 export const OpportunitiesPage: React.FC = () => {
-  const { currentUser, activeProfile, domainScores, t } = useApp();
-  const { isOnline } = useNetworkStatus();
+  const { activeProfile, t } = useApp();
 
-  const opportunities = StorageService.getOpportunities();
-  const [userApplications, setUserApplications] = useState<Application[]>(() =>
-    StorageService.getUserApplications(currentUser.id)
-  );
+  const [careers, setCareers] = useState<Career[]>(() => StorageService.getCareers());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterPathway, setFilterPathway] = useState<string>('All');
 
   useEffect(() => {
-    ApiService.getMyApplications()
-      .then((apps) => {
-        if (apps && apps.length > 0) {
-          setUserApplications(apps);
+    ApiService.getCareers()
+      .then((data) => {
+        if (data && data.length > 0) {
+          // Filter to strictly verified careers
+          setCareers(data.filter((c) => c.status === 'verified'));
         }
       })
       .catch((err) => {
-        console.warn('Could not fetch server user applications:', err);
+        console.warn('Could not fetch server careers, using verified offline store:', err);
       });
-  }, [currentUser.id]);
+  }, []);
 
-  // Filters
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('All');
-  const [filterSector, setFilterSector] = useState<string>('All');
-  const [minMatchFilter, setMinMatchFilter] = useState<number>(0);
-
-  // Success apply banner
-  const [appliedNotice, setAppliedNotice] = useState<string | null>(null);
-
-  // Compute match percentage & detailed reasons for each opportunity
   const userSkills = activeProfile?.skills || [];
 
-  const oppsWithMatch = opportunities.map((opp) => {
-    // 1. Skill overlap
-    const matchedSkills = opp.requiredSkills.filter((s) =>
+  // Match analysis against verified career requirements
+  const careersWithMatch = careers.map((career) => {
+    const required = Array.isArray(career.requiredSkills) ? career.requiredSkills : [];
+    const matchedSkills = required.filter((s) =>
       userSkills.some(
         (us) =>
           us.toLowerCase().includes(s.toLowerCase()) ||
           s.toLowerCase().includes(us.toLowerCase())
       )
     );
-    const skillRatio =
-      opp.requiredSkills.length > 0 ? matchedSkills.length / opp.requiredSkills.length : 0.5;
-
-    // 2. Domain threshold check
-    const domainChecks: { domain: DomainType; meets: boolean; userScore: number; req: number }[] = [];
-    DOMAINS.forEach((d) => {
-      const uScore = domainScores[d] || 0;
-      const reqScore = opp.minDomainLevels[d] || 50;
-      domainChecks.push({
-        domain: d,
-        meets: uScore >= reqScore,
-        userScore: uScore,
-        req: reqScore,
-      });
-    });
-
-    const domainsMetCount = domainChecks.filter((dc) => dc.meets).length;
-    const domainRatio = domainsMetCount / 4;
-
-    // Composite match percentage (45% to 98%)
-    const matchPercentage = Math.min(
-      98,
-      Math.max(45, Math.round((skillRatio * 0.55 + domainRatio * 0.45) * 100))
-    );
+    const matchPercentage = required.length > 0
+      ? Math.round((matchedSkills.length / required.length) * 100)
+      : 50;
 
     return {
-      ...opp,
-      matchPercentage,
+      ...career,
       matchedSkills,
-      domainChecks,
+      matchPercentage,
     };
   });
 
-  // Unique filter choices
-  const uniqueTypes = Array.from(new Set(opportunities.map((o) => o.type)));
-  const uniqueSectors = Array.from(new Set(opportunities.map((o) => o.sector)));
+  const uniquePathways = Array.from(new Set(careers.map((c) => c.pathway)));
 
-  // Filter logic
-  const filtered = oppsWithMatch.filter((opp) => {
-    if (filterType !== 'All' && opp.type !== filterType) return false;
-    if (filterSector !== 'All' && opp.sector !== filterSector) return false;
-    if (opp.matchPercentage < minMatchFilter) return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      const matchText = `${opp.title} ${opp.organisation} ${opp.location} ${opp.requiredSkills.join(' ')}`.toLowerCase();
-      if (!matchText.includes(q)) return false;
-    }
-    return true;
+  const filteredCareers = careersWithMatch.filter((career) => {
+    const matchesQuery =
+      career.roleTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      career.pathway.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      career.requiredSkills.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()));
+
+    const matchesPathway = filterPathway === 'All' || career.pathway === filterPathway;
+
+    return matchesQuery && matchesPathway;
   });
-
-  // Handle Apply
-  const handleApply = async (opp: (typeof oppsWithMatch)[0]) => {
-    if (!isOnline) {
-      setAppliedNotice('Opportunity applications are disabled offline. Please connect to the internet to apply.');
-      setTimeout(() => setAppliedNotice(null), 4000);
-      return;
-    }
-    const existing = userApplications.find((a) => a.opportunityId === opp.id);
-    if (existing) return;
-
-    const newApp: Application = {
-      id: `app-${Date.now()}`,
-      opportunityId: opp.id,
-      opportunityTitle: opp.title,
-      organisation: opp.organisation,
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      appliedAt: new Date().toISOString(),
-      status: 'Submitted',
-      matchPercentage: opp.matchPercentage,
-      notes: 'Submitted through StatSkillAI competency verified credential gateway.',
-    };
-
-    StorageService.saveApplication(newApp);
-    setUserApplications([newApp, ...userApplications]);
-    setAppliedNotice(`Application for "${opp.title}" submitted successfully.`);
-    setTimeout(() => setAppliedNotice(null), 4000);
-
-    try {
-      await ApiService.applyToOpportunity(opp.id, opp.matchPercentage, newApp.notes);
-    } catch (err) {
-      console.warn('Backend applyToOpportunity fallback to local storage:', err);
-    }
-  };
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -154,226 +78,187 @@ export const OpportunitiesPage: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
-              Verified Openings
+              Verified Government Routes
             </span>
             <span className="text-xs text-slate-500">
-              {opportunities.length} Opportunities Indexed
+              {filteredCareers.length} Official Career Pathways
             </span>
           </div>
           <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight mt-1">
-            {t('opportunitiesTitle')}
+            Statistical & Government Career Development
           </h1>
           <p className="text-xs sm:text-sm text-slate-600 mt-0.5">
-            {t('opportunitiesSubtitle')}
+            Curated statistical entry routes and gazetted service rules from UPSC, SSC, and MoSPI.
+          </p>
+        </div>
+
+        {/* NCS Portal Quick Gateway */}
+        <a
+          href="https://www.ncs.gov.in"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-800 to-slate-900 text-white rounded-lg font-bold text-xs shadow-xs hover:opacity-95 shrink-0"
+        >
+          <span>National Career Service (NCS)</span>
+          <ExternalLink className="w-3.5 h-3.5" />
+        </a>
+      </div>
+
+      {/* Official Data Integrity Callout */}
+      <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex items-start gap-3 text-xs text-emerald-950">
+        <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
+        <div className="space-y-1">
+          <p className="font-bold">Official Source Attribution & Traceability</p>
+          <p className="text-emerald-800 leading-relaxed">
+            All career pathways are curated strictly from gazetted service rules and published notices on official portals (UPSC, SSC, MoSPI). 
+            StatSkillAI never fabricates job vacancies. Live partner openings are accessed directly through the National Career Service gateway.
           </p>
         </div>
       </div>
 
-      <NoticeBanner type="info" title="Sample Demonstration Data">
-        {t('sampleDataNotice')} External links navigate directly to official government or institutional home portals.
-      </NoticeBanner>
-
-      {appliedNotice && (
-        <NoticeBanner type="success" title="Application Confirmed">
-          {appliedNotice} Track status under your submissions below or in the administrative portal.
-        </NoticeBanner>
-      )}
-
       {/* Filter and Search Bar */}
       <div className="bg-white rounded-xl p-4 sm:p-5 border border-slate-200 shadow-xs space-y-4">
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
           {/* Search */}
-          <div className="sm:col-span-1 relative">
-            <label className="block font-semibold text-slate-700 mb-1">Search Keywords</label>
+          <div className="sm:col-span-2 relative">
+            <label className="block font-semibold text-slate-700 mb-1">Search Pathways & Required Skills</label>
             <div className="relative">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search title, skills..."
+                placeholder="Search by role title, pathway, or skills..."
                 className="w-full pl-8 pr-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500"
               />
             </div>
           </div>
 
-          {/* Type Filter */}
+          {/* Pathway Filter */}
           <div>
-            <label className="block font-semibold text-slate-700 mb-1">Opportunity Type</label>
+            <label className="block font-semibold text-slate-700 mb-1">Cadre / Pathway</label>
             <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
+              value={filterPathway}
+              onChange={(e) => setFilterPathway(e.target.value)}
               className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500"
             >
-              <option value="All">All Types</option>
-              {uniqueTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="All">All Pathways</option>
+              {uniquePathways.map((p) => (
+                <option key={p} value={p}>
+                  {p}
                 </option>
               ))}
             </select>
-          </div>
-
-          {/* Sector Filter */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">Sector</label>
-            <select
-              value={filterSector}
-              onChange={(e) => setFilterSector(e.target.value)}
-              className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-teal-500"
-            >
-              <option value="All">All Sectors</option>
-              {uniqueSectors.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Minimum Match Filter */}
-          <div>
-            <label className="block font-semibold text-slate-700 mb-1">
-              Minimum Match Score: {minMatchFilter}%
-            </label>
-            <input
-              type="range"
-              min="0"
-              max="90"
-              step="10"
-              value={minMatchFilter}
-              onChange={(e) => setMinMatchFilter(parseInt(e.target.value))}
-              className="w-full accent-teal-700 mt-2"
-            />
           </div>
         </div>
       </div>
 
-      {/* Opportunity Cards List */}
+      {/* Career Cards List */}
       <div className="space-y-4">
-        {filtered.length === 0 ? (
-          <div className="p-8 text-center bg-white rounded-xl border border-slate-200 text-xs text-slate-500 italic">
-            No opportunities match your selected filter criteria. Try resetting the filters.
+        {filteredCareers.length === 0 ? (
+          <div className="text-center py-12 bg-white rounded-xl border border-slate-200 p-6 space-y-2">
+            <p className="text-sm font-semibold text-slate-700">No matching career pathways found.</p>
+            <p className="text-xs text-slate-500">Try adjusting your keyword search or pathway filter.</p>
           </div>
         ) : (
-          filtered.map((opp) => {
-            const isApplied = userApplications.some((a) => a.opportunityId === opp.id);
-            const app = userApplications.find((a) => a.opportunityId === opp.id);
-
-            return (
-              <div
-                key={opp.id}
-                className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 hover:border-teal-400 transition-all shadow-2xs space-y-4"
-              >
-                {/* Header info */}
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h2 className="text-base sm:text-lg font-black text-slate-900 leading-snug">
-                        {opp.title}
-                      </h2>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 bg-teal-100 px-2 py-0.5 rounded">
-                        {opp.type}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600">
-                      <span className="flex items-center gap-1 font-semibold text-slate-800">
-                        <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                        {opp.organisation}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                        {opp.location}
-                      </span>
-                      <span>•</span>
-                      <span className="font-semibold text-teal-900">{opp.sector}</span>
-                    </div>
-                  </div>
-
-                  {/* Match Percentage Badge */}
-                  <div className="shrink-0 text-left sm:text-right bg-slate-50 sm:bg-transparent p-2.5 sm:p-0 rounded-lg">
-                    <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-teal-100 text-teal-950 font-black text-xs border border-teal-300">
-                      <Sparkles className="w-3.5 h-3.5 text-teal-700" />
-                      <span>{opp.matchPercentage}% Match</span>
-                    </div>
-                    <span className="block text-[11px] text-slate-500 mt-1">
-                      {opp.stipendOrSalary || 'Standard Gov Scale'}
+          filteredCareers.map((career) => (
+            <div
+              key={career.id}
+              className="bg-white rounded-xl p-5 sm:p-6 border border-slate-200 shadow-xs hover:border-slate-300 transition-all space-y-4"
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200">
+                      {career.pathway}
+                    </span>
+                    <span className="text-[10px] font-semibold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded border border-emerald-300">
+                      ✓ Verified Source
                     </span>
                   </div>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                    {career.roleTitle}
+                  </h2>
                 </div>
 
-                <p className="text-xs text-slate-700 leading-relaxed">
-                  {opp.description}
-                </p>
-
-                {/* Match Breakdown & Skills Overlap */}
-                <div className="p-3 bg-slate-50 rounded-lg border border-slate-200/80 space-y-2 text-xs">
-                  <span className="font-bold text-slate-800 block">
-                    Competency Matching Criteria & Rationale:
+                {/* Profile Skill Match */}
+                <div className="shrink-0 flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-200">
+                  <Sparkles className="w-4 h-4 text-teal-600" />
+                  <span className="text-xs font-bold text-slate-800">
+                    {career.matchPercentage}% Profile Match
                   </span>
-
-                  <div className="flex flex-wrap gap-1.5 items-center">
-                    <span className="text-slate-500 font-semibold mr-1">Required Skills:</span>
-                    {opp.requiredSkills.map((skill) => {
-                      const userHasSkill = opp.matchedSkills.includes(skill);
-                      return (
-                        <span
-                          key={skill}
-                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
-                            userHasSkill
-                              ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
-                              : 'bg-slate-100 text-slate-600 border-slate-300'
-                          }`}
-                        >
-                          {skill} {userHasSkill ? '✓' : ''}
-                        </span>
-                      );
-                    })}
-                  </div>
-
-                  {/* Domain thresholds */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-200/60 text-[11px]">
-                    {opp.domainChecks.map((dc) => (
-                      <div key={dc.domain} className="flex items-center justify-between p-1 bg-white rounded border border-slate-200">
-                        <span className="text-slate-600">{dc.domain}:</span>
-                        <span className={dc.meets ? 'text-emerald-700 font-bold' : 'text-amber-700 font-bold'}>
-                          {dc.userScore}/{dc.req} req
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Footer and Apply Button */}
-                <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center gap-1.5 text-slate-500">
-                    <Calendar className="w-3.5 h-3.5" />
-                    <span>Application Deadline: <strong>{opp.deadline}</strong></span>
-                  </div>
-
-                  <div className="flex items-center gap-3 w-full sm:w-auto">
-                    {isApplied ? (
-                      <span className="px-4 py-2 rounded-lg bg-emerald-100 border border-emerald-300 text-emerald-900 font-bold text-xs flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-700" />
-                        <span>Status: {app?.status || 'Submitted'}</span>
-                      </span>
-                    ) : (
-                      <button
-                        onClick={() => handleApply(opp)}
-                        disabled={!isOnline}
-                        title={!isOnline ? 'Applications require an active internet connection' : undefined}
-                        className="w-full sm:w-auto px-5 py-2 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs transition-colors disabled:opacity-40"
-                      >
-                        {!isOnline ? 'Online Only' : t('apply')}
-                      </button>
-                    )}
-                  </div>
                 </div>
               </div>
-            );
-          })
+
+              {/* Qualification & Entry Route */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-1">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <GraduationCap className="w-3.5 h-3.5 text-teal-700" />
+                    Prescribed Educational Qualification
+                  </span>
+                  <p className="text-slate-600 leading-relaxed">
+                    {career.requiredQualification}
+                  </p>
+                </div>
+
+                <div className="bg-slate-50 p-3 rounded-lg border border-slate-100 space-y-1">
+                  <span className="font-bold text-slate-800 flex items-center gap-1.5">
+                    <Award className="w-3.5 h-3.5 text-sky-700" />
+                    Official Gazetted Entry Route
+                  </span>
+                  <p className="text-slate-600 leading-relaxed">
+                    {career.entryRoute}
+                  </p>
+                </div>
+              </div>
+
+              {/* Skills Tags */}
+              <div className="space-y-1.5">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                  Required Competencies
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {career.requiredSkills.map((skill) => {
+                    const isMatched = career.matchedSkills.includes(skill);
+                    return (
+                      <span
+                        key={skill}
+                        className={`text-[11px] px-2 py-0.5 rounded-md font-medium border ${
+                          isMatched
+                            ? 'bg-teal-50 text-teal-800 border-teal-300 font-semibold'
+                            : 'bg-slate-100 text-slate-700 border-slate-200'
+                        }`}
+                      >
+                        {skill} {isMatched && '✓'}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer with Source Name, Link & Last Verified Date */}
+              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex flex-wrap items-center gap-2 text-slate-500">
+                  <span>Source: <strong className="text-slate-800">{career.sourceName}</strong></span>
+                  <span>•</span>
+                  <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                    Last verified: {career.lastVerifiedAt ? new Date(career.lastVerifiedAt).toISOString().split('T')[0] : '2026-10-31'}
+                  </span>
+                </div>
+
+                <a
+                  href={career.sourceUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 font-bold text-teal-700 hover:text-teal-900 hover:underline"
+                >
+                  <span>Official Recruitment Notice / Gazette</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>

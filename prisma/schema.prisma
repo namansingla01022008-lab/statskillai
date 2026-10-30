@@ -102,21 +102,62 @@ model GapAnalysis {
 }
 
 model Course {
-  id            String   @id @default(uuid())
-  title         String
-  domain        String   // Technical, Statistical, Digital, Behavioural
-  provider      String
-  source        String   // SWAYAM, NPTEL, iGOT Karmayogi, NCS, Company Training
-  duration      String
-  level         String   // Beginner, Intermediate, Advanced
-  description   String
-  portalUrl     String
-  skillsCovered String   @default("[]") // JSON string[]
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id             String    @id @default(uuid())
+  title          String
+  domain         String    @default("Statistical") // Technical, Statistical, Digital, Behavioural
+  provider       String    // iGOT Karmayogi | NPTEL | SWAYAM | NSSTA | MoSPI | other
+  source         String    @default("SWAYAM") // SWAYAM, NPTEL, iGOT Karmayogi, NSSTA, MoSPI
+  duration       String?
+  level          String    @default("Intermediate") // Beginner, Intermediate, Advanced
+  description    String
+  topic          String    @default("Statistical Inference")
+  language       String    @default("English")
+  sourceUrl      String    @unique
+  sourceName     String    @default("Official Portal")
+  portalUrl      String    @default("")
+  licenseNote    String?
+  status         String    @default("unverified") // verified | unverified | broken | hidden
+  lastVerifiedAt DateTime?
+  skillsCovered  String    @default("[]") // JSON string[]
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([domain])
   @@index([source])
+  @@index([status])
+  @@index([topic])
+}
+
+model Career {
+  id                    String    @id @default(uuid())
+  roleTitle             String
+  pathway               String
+  requiredSkills        String    @default("[]") // JSON string[]
+  requiredQualification String
+  entryRoute            String
+  sourceUrl             String    @unique
+  sourceName            String
+  status                String    @default("unverified") // verified | unverified | broken | hidden
+  lastVerifiedAt        DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([status])
+  @@index([pathway])
+}
+
+model Dataset {
+  id              String    @id @default(uuid())
+  name            String
+  publisher       String
+  sourceUrl       String    @unique
+  licence         String    @default("GODL-India")
+  attributionText String
+  lastVerifiedAt  DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([publisher])
 }
 
 model LearningPath {

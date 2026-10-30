@@ -4,10 +4,30 @@ import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/a
 
 const router = Router();
 
-// GET all courses
+// GET courses (Filters to status: 'verified' by default for learner integrity)
 router.get('/', async (req, res) => {
   try {
+    const { status, domain, topic } = req.query;
+
+    const where: any = {};
+
+    // By default, only serve 'verified' courses to learners and general API consumers
+    if (status && typeof status === 'string') {
+      where.status = status;
+    } else {
+      where.status = 'verified';
+    }
+
+    if (domain && typeof domain === 'string') {
+      where.domain = domain;
+    }
+
+    if (topic && typeof topic === 'string') {
+      where.topic = topic;
+    }
+
     const courses = await prisma.course.findMany({
+      where,
       orderBy: { createdAt: 'desc' },
     });
 
@@ -23,25 +43,48 @@ router.get('/', async (req, res) => {
   }
 });
 
-// POST create course (Admin only)
+// POST create course (Admin only with required sourceUrl & verification metadata)
 router.post('/', authenticate, requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { title, domain, provider, source, duration, level, description, portalUrl, skillsCovered } = req.body;
+    const {
+      title,
+      domain,
+      provider,
+      source,
+      duration,
+      level,
+      description,
+      portalUrl,
+      sourceUrl,
+      sourceName,
+      topic,
+      language,
+      licenseNote,
+      status,
+      skillsCovered,
+    } = req.body;
 
-    if (!title || !domain) {
-      return res.status(400).json({ error: 'Title and domain are required.' });
+    if (!title || !sourceUrl) {
+      return res.status(400).json({ error: 'Title and sourceUrl are required.' });
     }
 
     const course = await prisma.course.create({
       data: {
         title,
-        domain,
-        provider: provider || 'National Portal',
-        source: source || 'SWAYAM',
-        duration: duration || '6 Weeks',
+        domain: domain || 'Statistical',
+        provider: provider || 'SWAYAM',
+        source: source || provider || 'SWAYAM',
+        duration: duration || '8 Weeks',
         level: level || 'Intermediate',
         description: description || '',
-        portalUrl: portalUrl || 'https://swayam.gov.in',
+        topic: topic || 'General Statistics',
+        language: language || 'English',
+        sourceUrl,
+        sourceName: sourceName || provider || 'Official Portal',
+        portalUrl: portalUrl || sourceUrl,
+        licenseNote: licenseNote || null,
+        status: status || 'unverified',
+        lastVerifiedAt: status === 'verified' ? new Date() : null,
         skillsCovered: JSON.stringify(skillsCovered || []),
       },
     });

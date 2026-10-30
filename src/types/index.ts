@@ -105,12 +105,42 @@ export interface Course {
   title: string;
   domain: DomainType;
   provider: string;
-  source: 'SWAYAM' | 'NPTEL' | 'iGOT Karmayogi' | 'NCS' | 'Company Training';
-  duration: string;
+  source: string;
+  duration?: string | null;
   level: ProficiencyLevel;
   description: string;
-  portalUrl: string;
+  portalUrl?: string;
+  sourceUrl: string;
+  sourceName?: string;
+  licenseNote?: string | null;
+  status: 'verified' | 'unverified' | 'broken' | 'hidden';
+  lastVerifiedAt?: string | null;
   skillsCovered: string[];
+  topic?: string;
+  language?: string;
+}
+
+export interface Career {
+  id: string;
+  roleTitle: string;
+  pathway: string;
+  requiredSkills: string[];
+  requiredQualification: string;
+  entryRoute: string;
+  sourceUrl: string;
+  sourceName: string;
+  status: 'verified' | 'unverified' | 'broken' | 'hidden';
+  lastVerifiedAt?: string | null;
+}
+
+export interface Dataset {
+  id: string;
+  name: string;
+  publisher: string;
+  sourceUrl: string;
+  licence: string;
+  attributionText: string;
+  lastVerifiedAt?: string | null;
 }
 
 export interface LearningStep {
@@ -125,6 +155,8 @@ export interface LearningStep {
   isAiSuggested?: boolean;
   isMentorRecommended?: boolean;
   courseId?: string;
+  isCourseUnavailable?: boolean;
+  unavailableNotice?: string;
 }
 
 export interface LearningPath {

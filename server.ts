@@ -22,6 +22,7 @@ import assessmentsRouter from './server/routes/assessments';
 import gapsRouter from './server/routes/gaps';
 import pathsRouter from './server/routes/paths';
 import coursesRouter from './server/routes/courses';
+import careersRouter from './server/routes/careers';
 import opportunitiesRouter from './server/routes/opportunities';
 import mentorshipRouter from './server/routes/mentorship';
 import analyticsRouter from './server/routes/analytics';
@@ -114,6 +115,7 @@ async function startServer() {
   app.use('/api/gaps', gapsRouter);
   app.use('/api/paths', pathsRouter);
   app.use('/api/courses', coursesRouter);
+  app.use('/api/careers', careersRouter);
   app.use('/api/opportunities', opportunitiesRouter);
   app.use('/api/mentorship', mentorshipRouter);
   app.use('/api/analytics', analyticsRouter);

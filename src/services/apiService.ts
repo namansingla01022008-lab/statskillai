@@ -25,7 +25,11 @@ import {
   LeaderboardEntry,
   RewardAuditLog,
   LearnerStreak,
+  Career,
+  Dataset,
 } from '../types';
+
+import { SEED_CAREERS, SEED_DATASETS } from './seedData';
 
 const TOKEN_KEY = 'statskill_jwt_token';
 
@@ -239,6 +243,23 @@ export const ApiService = {
   },
 
   // 7. Opportunity & Application APIs
+  async getCareers(): Promise<Career[]> {
+    try {
+      const res = await this.fetchApi<{ success: boolean; careers: Career[] }>('/api/careers');
+      return res.careers || [];
+    } catch {
+      return SEED_CAREERS;
+    }
+  },
+
+  async getDatasets(): Promise<Dataset[]> {
+    try {
+      const res = await this.fetchApi<{ success: boolean; datasets: Dataset[] }>('/api/careers/datasets');
+      return res.datasets || [];
+    } catch {
+      return SEED_DATASETS;
+    }
+  },
   async getOpportunities(): Promise<Opportunity[]> {
     const data = await this.fetchApi<{ success: boolean; opportunities: Opportunity[] }>('/api/opportunities');
     return data.opportunities;

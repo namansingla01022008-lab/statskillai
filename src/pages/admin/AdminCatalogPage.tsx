@@ -35,6 +35,10 @@ export const AdminCatalogPage: React.FC = () => {
     level: 'Intermediate',
     description: '',
     portalUrl: 'https://swayam.gov.in',
+    sourceUrl: 'https://swayam.gov.in',
+    sourceName: 'SWAYAM',
+    status: 'verified',
+    topic: 'Statistical Inference',
     skillsCovered: [],
   });
   const [courseSkillsInput, setCourseSkillsInput] = useState('');
@@ -139,6 +143,10 @@ export const AdminCatalogPage: React.FC = () => {
                   level: 'Intermediate',
                   description: '',
                   portalUrl: 'https://swayam.gov.in',
+                  sourceUrl: 'https://swayam.gov.in',
+                  sourceName: 'SWAYAM',
+                  status: 'verified',
+                  topic: 'Statistical Inference',
                   skillsCovered: [],
                 });
                 setCourseSkillsInput('');
@@ -219,8 +227,8 @@ export const AdminCatalogPage: React.FC = () => {
               <tr>
                 <th className="p-3">Title & Domain</th>
                 <th className="p-3">Source & Provider</th>
-                <th className="p-3">Duration & Level</th>
-                <th className="p-3">Portal URL</th>
+                <th className="p-3">Status & Verification</th>
+                <th className="p-3">Official URL</th>
                 <th className="p-3 text-right">Actions</th>
               </tr>
             </thead>
@@ -238,16 +246,29 @@ export const AdminCatalogPage: React.FC = () => {
                     <p className="text-[11px] text-slate-500">{c.provider}</p>
                   </td>
                   <td className="p-3 text-slate-600">
-                    {c.duration} • {c.level}
+                    <div className="space-y-1">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border ${
+                        c.status === 'verified'
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-300'
+                          : c.status === 'broken'
+                          ? 'bg-rose-50 text-rose-800 border-rose-300'
+                          : 'bg-amber-50 text-amber-800 border-amber-300'
+                      }`}>
+                        {c.status || 'unverified'}
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        {c.lastVerifiedAt ? `Verified: ${new Date(c.lastVerifiedAt).toISOString().split('T')[0]}` : 'Unverified'}
+                      </p>
+                    </div>
                   </td>
                   <td className="p-3">
                     <a
-                      href={c.portalUrl}
+                      href={c.sourceUrl || c.portalUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="text-teal-700 hover:underline flex items-center gap-1 font-mono text-[11px]"
                     >
-                      <span>{c.portalUrl.replace('https://', '')}</span>
+                      <span>{(c.sourceUrl || c.portalUrl || '').replace('https://', '').slice(0, 30)}</span>
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </td>

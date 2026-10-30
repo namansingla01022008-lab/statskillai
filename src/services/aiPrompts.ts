@@ -103,35 +103,37 @@ Return strictly structured JSON.`,
     availableCourses: Course[],
     language: 'en' | 'hi'
   ) {
-    const catalogSummary = availableCourses
+    // Only send verified candidates with (id, title, topic, level)
+    const verifiedCourses = availableCourses.filter((c) => c.status === 'verified');
+    const catalogSummary = verifiedCourses
       .map(
         (c) =>
-          `ID: ${c.id} | Title: "${c.title}" | Domain: ${c.domain} | Source: ${c.source} | Level: ${c.level}`
+          `ID: ${c.id} | Title: "${c.title}" | Topic: ${c.topic || 'Statistics'} | Level: ${c.level}`
       )
       .join('\n');
 
     const langInstr =
       language === 'hi'
-        ? 'Write step rationales and custom titles in Hindi.'
-        : 'Write step rationales and custom titles in formal English.';
+        ? 'Write step rationales and custom practical titles in Hindi.'
+        : 'Write step rationales and custom practical titles in formal English.';
 
     return {
       systemInstruction: `You are an academic pathway advisor operating under India's NEP-2020 framework.
-Construct a sequenced personal learning path of 6 to 8 steps tailored to the learner's goal: "${profile.careerGoal}".
+Construct a sequenced personal learning path tailored to the learner's goal: "${profile.careerGoal}".
 Current gaps to bridge:
 ${gaps.map((g) => `- [${g.domain}] ${g.skill} (${g.severity} severity): ${g.reason}`).join('\n')}
 
-Catalog Courses available for matching:
-${catalogSummary}
+Verified Catalog Candidates:
+${catalogSummary || 'None available'}
 
-Guidelines:
-- Match relevant steps directly to catalog course IDs (using existing catalog courses where appropriate).
-- You may also introduce 2 or 3 hands-on practical exercises or specialized reading steps, labeled isAiSuggested: true.
-- Order steps logically from foundational/high-severity gaps to capstone/managerial practices.
-- Set status for step 1 to 'In progress' or 'Not started', others to 'Not started'.
+CRITICAL INTEGRITY INSTRUCTIONS:
+- You may ONLY select course IDs from the provided candidate list.
+- You are strictly FORBIDDEN from generating or hallucinating course names, URLs, institutions, or job postings.
+- You may introduce hands-on practical exercises labeled isAiSuggested: true (without course IDs).
+- Order steps logically from foundational/high-severity gaps to capstone practices.
 ${langInstr}
 Return strictly structured JSON.`,
-      prompt: `Generate an optimal 6 to 8 step sequenced learning curriculum.`,
+      prompt: `Generate a sequenced curriculum selecting only from verified catalog IDs.`,
     };
   },
 

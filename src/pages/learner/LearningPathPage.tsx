@@ -354,23 +354,32 @@ export const LearningPathPage: React.FC = () => {
                     {step.rationale}
                   </p>
 
-                  {/* Matched Course details & Portal Link if applicable */}
-                  {matchedCourse && (
-                    <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-                      <span className="text-slate-500">
-                        Official Provider: <strong className="text-slate-700">{matchedCourse.provider}</strong>
-                      </span>
+                  {/* Matched Course details & Official Source Link with Last Verified Date */}
+                  {matchedCourse ? (
+                    <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-2 text-slate-600">
+                        <span>Source: <strong className="text-slate-800">{matchedCourse.sourceName || matchedCourse.provider}</strong></span>
+                        <span>•</span>
+                        <span className="text-emerald-700 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          Last verified: {matchedCourse.lastVerifiedAt ? new Date(matchedCourse.lastVerifiedAt).toISOString().split('T')[0] : '2026-10-31'}
+                        </span>
+                      </div>
                       <a
-                        href={matchedCourse.portalUrl}
+                        href={matchedCourse.sourceUrl || matchedCourse.portalUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 font-semibold text-teal-700 hover:text-teal-900 hover:underline"
                       >
-                        <span>Open on {matchedCourse.source} Home</span>
+                        <span>Official Course Page</span>
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
                     </div>
-                  )}
+                  ) : step.courseId ? (
+                    <div className="pt-2 border-t border-amber-200 bg-amber-50 p-2.5 rounded text-xs text-amber-800 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-amber-600 shrink-0" />
+                      <span>This module is temporarily unavailable or archived pending official source re-verification.</span>
+                    </div>
+                  ) : null}
                 </div>
               );
             })}

@@ -1,0 +1,38 @@
+[
+  {
+    "id": "dataset-cpi-01",
+    "name": "Consumer Price Index (Rural, Urban, Combined) and Consumer Food Price Index",
+    "publisher": "Ministry of Statistics and Programme Implementation (MoSPI)",
+    "source_url": "https://data.gov.in/resource/consumer-price-index",
+    "licence": "GODL-India",
+    "attribution_text": "Source: Ministry of Statistics & Programme Implementation (MoSPI), Government of India (OGD Platform India / eSankhyiki under Government Open Data License - India).",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "dataset-plfs-02",
+    "name": "Periodic Labour Force Survey (PLFS) Key Indicators and Microdata",
+    "publisher": "Ministry of Statistics and Programme Implementation (MoSPI)",
+    "source_url": "https://data.gov.in/resource/periodic-labour-force-survey",
+    "licence": "GODL-India",
+    "attribution_text": "Source: National Sample Survey Office (NSSO), MoSPI, Government of India (microdata.gov.in / OGD Platform India under GODL-India).",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "dataset-iip-03",
+    "name": "Index of Industrial Production (IIP) Base Year 2011-12",
+    "publisher": "Ministry of Statistics and Programme Implementation (MoSPI)",
+    "source_url": "https://data.gov.in/resource/index-of-industrial-production",
+    "licence": "GODL-India",
+    "attribution_text": "Source: National Accounts Division, MoSPI, Government of India (published under GODL-India).",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "dataset-asi-04",
+    "name": "Annual Survey of Industries (ASI) Factory Sector Summary Results",
+    "publisher": "Ministry of Statistics and Programme Implementation (MoSPI)",
+    "source_url": "https://data.gov.in/resource/annual-survey-of-industries",
+    "licence": "GODL-India",
+    "attribution_text": "Source: Industrial Statistics Wing, MoSPI, Government of India (published under GODL-India).",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  }
+]

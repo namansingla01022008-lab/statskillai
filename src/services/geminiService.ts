@@ -384,26 +384,44 @@ export const GeminiService = {
       responseSchema: pathSchema,
     });
 
+    // Map verified courses for server/client ID validation
+    const verifiedMap = new Map(
+      courses.filter((c) => c.status === 'verified').map((c) => [c.id, c])
+    );
+
     if (text) {
       try {
         const parsed = JSON.parse(text);
-        if (Array.isArray(parsed.steps) && parsed.steps.length >= 4) {
-          const steps = parsed.steps.map((st: any, idx: number) => ({
-            id: `step-gen-${idx + 1}`,
-            title: st.title,
-            domain: (['Technical', 'Statistical', 'Digital', 'Behavioural'].includes(st.domain)
-              ? st.domain
-              : 'Statistical') as DomainType,
-            type: (['Course', 'Training Programme', 'Reading', 'Practice'].includes(st.type)
-              ? st.type
-              : 'Course') as any,
-            estimatedDuration: st.estimatedDuration || '4 Weeks',
-            source: st.source || 'SWAYAM',
-            rationale: st.rationale,
-            status: idx === 0 ? 'In progress' : 'Not started',
-            isAiSuggested: Boolean(st.isAiSuggested || st.source === 'AI-suggested'),
-            courseId: st.courseId,
-          }));
+        if (Array.isArray(parsed.steps) && parsed.steps.length >= 2) {
+          const steps = parsed.steps.map((st: any, idx: number) => {
+            // Strict ID verification: discard any courseId not present in the verified candidate map
+            const verifiedCourse = st.courseId ? verifiedMap.get(st.courseId) : undefined;
+            const validCourseId = verifiedCourse ? verifiedCourse.id : undefined;
+
+            // Render title, source, and domain strictly from database when courseId is present
+            const title = verifiedCourse ? verifiedCourse.title : st.title;
+            const source = verifiedCourse ? verifiedCourse.provider : (st.source || 'SWAYAM');
+            const domain = verifiedCourse ? verifiedCourse.domain : (
+              ['Technical', 'Statistical', 'Digital', 'Behavioural'].includes(st.domain)
+                ? st.domain
+                : 'Statistical'
+            );
+
+            return {
+              id: `step-gen-${idx + 1}`,
+              title,
+              domain: domain as DomainType,
+              type: (['Course', 'Training Programme', 'Reading', 'Practice'].includes(st.type)
+                ? st.type
+                : 'Course') as any,
+              estimatedDuration: verifiedCourse?.duration || st.estimatedDuration || '4 Weeks',
+              source,
+              rationale: st.rationale,
+              status: idx === 0 ? 'In progress' : 'Not started',
+              isAiSuggested: Boolean(!verifiedCourse && (st.isAiSuggested || st.source === 'AI-suggested')),
+              courseId: validCourseId,
+            };
+          });
 
           return {
             learningPath: {

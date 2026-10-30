@@ -105,7 +105,7 @@ export const MenteeDetailPage: React.FC = () => {
       title: course.title,
       domain: course.domain,
       type: 'Course',
-      estimatedDuration: course.duration,
+      estimatedDuration: course.duration || '8 Weeks',
       source: course.source,
       rationale: customRationale.trim() || `Recommended directly by your mentor, ${currentUser.name}.`,
       status: 'Not started',

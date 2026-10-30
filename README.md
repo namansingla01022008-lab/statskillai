@@ -343,6 +343,70 @@ StatSkillAI is built according to **WCAG 2.1 AA** specifications:
 
 ---
 
+## 🔍 Data Sources and Verification
+
+StatSkillAI operates on a strict **Source Attribution & Data Integrity Principle**:
+> **Official source → verified record in our database → Gemini only selects from it.**  
+> No open "all India courses" or "all government jobs" public developer API exists. All data is curated from official live government and national academic portals. **StatSkillAI strictly forbids hallucinating or fabricating courses, roles, institutions, URLs, durations, or dates.**
+
+---
+
+### 1. Allowlisted Official Sources
+
+| Portal / Authority | Official Domain | Nature of Curated Data | Access & Legal Compliance Model |
+| :--- | :--- | :--- | :--- |
+| **NPTEL / SWAYAM** | `nptel.ac.in`, `onlinecourses.nptel.ac.in`, `swayam.gov.in` | Statistics, Sampling, Econometrics, Probability, Python, R, ML | Official open courseware pages; direct canonical URLs recorded; no content scraping. |
+| **iGOT Karmayogi** | `igotkarmayogi.gov.in` | Civil service conduct, public policy, evidence-based decision making | Publicly accessible catalogue records; verified through `MockIgotAdapter`; zero completion data fabrication. |
+| **MoSPI / NSSTA** | `mospi.gov.in`, `esankhyiki.mospi.gov.in` | National Statistical Systems Induction, CPI, IIP, SSS service rules | Official training programmes and service gazettes; documents linked, never copied. |
+| **UPSC** | `upsc.gov.in` | Indian Statistical Service (ISS) examination notices | Official examination notices and service qualifications. |
+| **SSC** | `ssc.gov.in` | Junior Statistical Officer (JSO) & Statistical Investigator Gr II | Gazetted CGL Paper-II Statistics recruitment notices. |
+| **National Career Service (NCS)** | `ncs.gov.in` | National career gateway & live vacancies | Users are directed to official portal; listings are not copied without partnership agreements. |
+| **data.gov.in / OGD India** | `data.gov.in`, `microdata.gov.in` | CPI, PLFS, IIP, and ASI national series | Reused with strict attribution under Government Open Data License - India (GODL-India). |
+
+*(Note: In accordance with copyright and intellectual property safeguards, NCERT textbooks are NOT embedded or hosted without written clearance).*
+
+---
+
+### 2. Verification Lifecycle & Integrity Controls
+
+Every course and career record in the database follows a strict lifecycle:
+* **`verified`**: Live official URL confirmed, dated, and active. **Only `verified` records are ever shown to learners or supplied to the AI engine.**
+* **`unverified`**: Template or pending entries requiring manual nodal review. Completely isolated and hidden from public endpoints.
+* **`broken`**: Flagged automatically if the official link fails health checks or times out. Immediately hidden from UI and candidate sets.
+* **`hidden`**: Administratively archived.
+
+---
+
+### 3. Server-Side Gemini Recommendation Guardrails
+
+1. **Restricted Candidate Input**: The backend queries verified records only and sends minimal identifiers `(id, title, topic, level)` to Gemini.
+2. **Forced JSON Schema**: Gemini returns structured candidate IDs with educational rationales.
+3. **Server-Side Hallucination Discard**: The server verifies every returned ID against the database candidate set. Any hallucinated or unrecognized ID is discarded immediately.
+4. **Authoritative Rendering**: Titles, providers, URLs, and durations are rendered **strictly from the database**, never from model output text.
+5. **No Hallucinated Recommendations**: If no verified course matches the gap, the system returns *"No verified recommendation available."*
+
+---
+
+### 4. Integrity Tooling & Commands
+
+* **Seed Validation**:
+  ```bash
+  npm run seed:validate
+  ```
+  Verifies that all seed records have mandatory fields, valid ISO dates, zero duplicates, and HTTPS URLs on allowlisted domains.
+* **Idempotent Database Seeding**:
+  ```bash
+  npm run seed
+  ```
+  Upserts validated records by canonical `sourceUrl`, preventing duplicates across multiple seed executions.
+* **Weekly Automated Link Health Checker**:
+  ```bash
+  npm run links:check
+  ```
+  Probes all registered URLs with 2-second rate-limiting and identifying User-Agent (`StatSkillAI-VerificationBot/1.0`). Automated weekly via GitHub Actions (`.github/workflows/link-checker.yml`).
+
+---
+
 ## 📄 License
 
 Distributed under the **MIT License**. See `LICENSE` for more information.

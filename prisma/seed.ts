@@ -5,6 +5,8 @@ import {
   SEED_USERS,
   SEED_ORGANISATIONS,
   SEED_COURSES,
+  SEED_CAREERS,
+  SEED_DATASETS,
   SEED_OPPORTUNITIES,
   SEED_MENTORS,
   SEED_PROFILES,
@@ -107,11 +109,11 @@ export async function seedDatabase() {
     });
   }
 
-  // 4. Seed Courses
-  console.log('[Seed] Seeding Courses...');
+  // 4. Seed Verified Courses (Upsert by canonical sourceUrl)
+  console.log('[Seed] Seeding Verified Official Courses...');
   for (const course of SEED_COURSES) {
     await prisma.course.upsert({
-      where: { id: course.id },
+      where: { sourceUrl: course.sourceUrl },
       update: {
         title: course.title,
         domain: course.domain,
@@ -120,7 +122,13 @@ export async function seedDatabase() {
         duration: course.duration,
         level: course.level,
         description: course.description,
-        portalUrl: course.portalUrl,
+        topic: course.topic || 'General Statistics',
+        language: course.language || 'English',
+        sourceName: course.sourceName || 'Official Portal',
+        licenseNote: course.licenseNote || null,
+        status: course.status || 'unverified',
+        lastVerifiedAt: course.lastVerifiedAt ? new Date(course.lastVerifiedAt) : null,
+        portalUrl: course.portalUrl || course.sourceUrl,
         skillsCovered: JSON.stringify(course.skillsCovered || []),
       },
       create: {
@@ -132,8 +140,69 @@ export async function seedDatabase() {
         duration: course.duration,
         level: course.level,
         description: course.description,
-        portalUrl: course.portalUrl,
+        topic: course.topic || 'General Statistics',
+        language: course.language || 'English',
+        sourceUrl: course.sourceUrl,
+        sourceName: course.sourceName || 'Official Portal',
+        licenseNote: course.licenseNote || null,
+        status: course.status || 'unverified',
+        lastVerifiedAt: course.lastVerifiedAt ? new Date(course.lastVerifiedAt) : null,
+        portalUrl: course.portalUrl || course.sourceUrl,
         skillsCovered: JSON.stringify(course.skillsCovered || []),
+      },
+    });
+  }
+
+  // 4b. Seed Verified Careers (Upsert by sourceUrl)
+  console.log('[Seed] Seeding Official Statistical Career Pathways...');
+  for (const career of SEED_CAREERS) {
+    await prisma.career.upsert({
+      where: { sourceUrl: career.sourceUrl },
+      update: {
+        roleTitle: career.roleTitle,
+        pathway: career.pathway,
+        requiredSkills: JSON.stringify(career.requiredSkills || []),
+        requiredQualification: career.requiredQualification,
+        entryRoute: career.entryRoute,
+        sourceName: career.sourceName,
+        status: career.status || 'unverified',
+        lastVerifiedAt: career.lastVerifiedAt ? new Date(career.lastVerifiedAt) : null,
+      },
+      create: {
+        id: career.id,
+        roleTitle: career.roleTitle,
+        pathway: career.pathway,
+        requiredSkills: JSON.stringify(career.requiredSkills || []),
+        requiredQualification: career.requiredQualification,
+        entryRoute: career.entryRoute,
+        sourceUrl: career.sourceUrl,
+        sourceName: career.sourceName,
+        status: career.status || 'unverified',
+        lastVerifiedAt: career.lastVerifiedAt ? new Date(career.lastVerifiedAt) : null,
+      },
+    });
+  }
+
+  // 4c. Seed Verified Datasets (Upsert by sourceUrl)
+  console.log('[Seed] Seeding Verified Official MoSPI Datasets...');
+  for (const ds of SEED_DATASETS) {
+    await prisma.dataset.upsert({
+      where: { sourceUrl: ds.sourceUrl },
+      update: {
+        name: ds.name,
+        publisher: ds.publisher,
+        licence: ds.licence || 'GODL-India',
+        attributionText: ds.attributionText,
+        lastVerifiedAt: ds.lastVerifiedAt ? new Date(ds.lastVerifiedAt) : null,
+      },
+      create: {
+        id: ds.id,
+        name: ds.name,
+        publisher: ds.publisher,
+        sourceUrl: ds.sourceUrl,
+        licence: ds.licence || 'GODL-India',
+        attributionText: ds.attributionText,
+        lastVerifiedAt: ds.lastVerifiedAt ? new Date(ds.lastVerifiedAt) : null,
       },
     });
   }
@@ -383,54 +452,7 @@ export async function seedDatabase() {
   }
 
   // 11. Seed Initial Applications
-  console.log('[Seed] Seeding Initial Applications...');
-  const aarav = await prisma.user.findFirst({ where: { role: 'learner' } });
-  const opp1 = await prisma.opportunity.findFirst({ where: { id: 'opp-101' } });
-  const opp2 = await prisma.opportunity.findFirst({ where: { id: 'opp-104' } });
-
-  if (aarav && opp1) {
-    await prisma.application.upsert({
-      where: { id: 'app-init-1' },
-      update: {
-        status: 'Under review',
-        matchPercentage: 82,
-      },
-      create: {
-        id: 'app-init-1',
-        opportunityId: opp1.id,
-        opportunityTitle: opp1.title,
-        organisation: opp1.organisation,
-        userId: aarav.id,
-        userName: aarav.name,
-        userEmail: aarav.email,
-        status: 'Under review',
-        matchPercentage: 82,
-        notes: 'Submitted resume and SWAYAM certification verification ID.',
-      },
-    });
-  }
-
-  if (aarav && opp2) {
-    await prisma.application.upsert({
-      where: { id: 'app-init-2' },
-      update: {
-        status: 'Submitted',
-        matchPercentage: 78,
-      },
-      create: {
-        id: 'app-init-2',
-        opportunityId: opp2.id,
-        opportunityTitle: opp2.title,
-        organisation: opp2.organisation,
-        userId: aarav.id,
-        userName: aarav.name,
-        userEmail: aarav.email,
-        status: 'Submitted',
-        matchPercentage: 78,
-        notes: 'Enclosed provisional transcript and assessment scorecard.',
-      },
-    });
-  }
+  console.log('[Seed] Seeding Initial Applications: Cleaned (fabricated opportunities removed per Phase 1)');
 
   // 12. Seed Reward Rules
   console.log('[Seed] Seeding Reward Rules...');

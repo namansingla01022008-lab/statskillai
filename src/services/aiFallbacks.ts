@@ -453,7 +453,7 @@ export const FallbackService = {
           title: matchingCourse.title,
           domain: gap.domain,
           type: 'Course',
-          estimatedDuration: matchingCourse.duration,
+          estimatedDuration: matchingCourse.duration || '4 Weeks',
           source: matchingCourse.source,
           rationale: `Targeted module addressing your ${gap.severity} severity gap in ${gap.skill}.`,
           status: idx === 0 ? 'In progress' : 'Not started',
@@ -611,7 +611,7 @@ export const FallbackService = {
       if (q.includes('sampling') || q.includes('नमूनाकरण') || q.includes('सांख्यिकी')) {
         return `**सांख्यिकीय नमूनाकरण (Survey Sampling) मार्गदर्शन:**
 1. **मुख्य अवधारणाएँ:** सरल यादृच्छिक नमूनाकरण (SRS), स्तरीकृत नमूनाकरण (Stratified Sampling), और क्लस्टर नमूनाकरण की बुनियादी गणनाएँ समझें।
-2. **अनुशंसित पाठ्यक्रम:** स्वयं (SWAYAM) पर 'Fundamentals of Survey Sampling & NSSO Methodologies' (आईआईटी कानपुर) और iGOT कर्मयोगी पर 'Official Statistics of India'।
+2. **अनुशंसित पाठ्यक्रम:** NPTEL पर 'Essentials of Data Science: Sampling Theory and Linear Regression Analysis' (आईआईटी कानपुर) अथवा NSSTA / MoSPI का 'Official Statistics Induction Programme'।
 3. **NEP-2020 क्रेडिट:** इन पाठ्यक्रमों के पूर्ण होने पर प्रमाण पत्र सीधे अकादमिक बैंक ऑफ क्रेडिट्स (ABC) में क्रेडिट पोर्टेबिलिटी के पात्र हैं।`;
       }
       return `**स्टेटस्किल-एआई अध्ययन सहायक:**
@@ -624,7 +624,7 @@ export const FallbackService = {
     if (q.includes('sampling') || q.includes('statistics') || q.includes('survey')) {
       return `### Recommended Strategy for Statistical Competency
 1. **Focus on Official Frameworks:** Review NSSO survey stratification standards and Horvitz-Thompson variance estimators.
-2. **Core Course Recommendation:** Enroll in *Fundamentals of Survey Sampling & NSSO Methodologies* (SWAYAM / IIT Kanpur) or *Official Statistics of India* on iGOT Karmayogi.
+2. **Core Course Recommendation:** Enroll in *Essentials of Data Science: Sampling Theory and Linear Regression Analysis* (NPTEL / IIT Kanpur) or *Official Statistics and National Statistical System Induction Programme* (NSSTA / MoSPI).
 3. **NEP-2020 Alignment:** SWAYAM course completion qualifies for credit transfer into your Academic Bank of Credits (ABC).
 4. **Mentorship:** Dr. Anita Rao (ISI Advisory Board) is currently accepting mentorship inquiries regarding survey methodologies.`;
     }

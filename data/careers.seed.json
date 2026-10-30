@@ -1,0 +1,74 @@
+[
+  {
+    "id": "career-iss-01",
+    "role_title": "Indian Statistical Service (ISS) - Junior Time Scale / Assistant Director",
+    "pathway": "Indian Statistical Service Cadre",
+    "required_skills": ["Official Statistics", "Sampling Theory", "Survey Design", "National Accounts", "Econometrics"],
+    "required_qualification": "Bachelor's Degree with Statistics / Mathematical Statistics / Applied Statistics as one of the subjects, or a Master's degree in Statistics / Mathematical Statistics / Applied Statistics from a recognized university.",
+    "entry_route": "Direct recruitment through the Union Public Service Commission (UPSC) Indian Statistical Service (ISS) Examination.",
+    "source_url": "https://upsc.gov.in",
+    "source_name": "Union Public Service Commission (UPSC) Official Notice",
+    "status": "verified",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "career-jso-02",
+    "role_title": "Junior Statistical Officer (JSO)",
+    "pathway": "Subordinate Statistical Service (SSS)",
+    "required_skills": ["Descriptive Statistics", "Sampling Theory", "Probability", "Statistical Inference", "Data Verification"],
+    "required_qualification": "Bachelor's Degree in any subject from a recognized University with at least 60% Marks in Mathematics at 12th standard level OR Bachelor's Degree in any subject with Statistics as one of the subjects at degree level.",
+    "entry_route": "Direct recruitment through Staff Selection Commission (SSC) Combined Graduate Level (CGL) Examination - Paper-II Statistics.",
+    "source_url": "https://ssc.gov.in/cgl-jso-notice",
+    "source_name": "Staff Selection Commission (SSC) Official Notice",
+    "status": "verified",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "career-sso-03",
+    "role_title": "Senior Statistical Officer (SSO)",
+    "pathway": "Subordinate Statistical Service (SSS)",
+    "required_skills": ["Survey Operations", "Data Quality Audit", "Advanced Sampling", "National Accounts", "Microdata Validation"],
+    "required_qualification": "Subordinate Statistical Service Rules: Minimum 5 years of regular service as Junior Statistical Officer in the Ministry of Statistics and Programme Implementation.",
+    "entry_route": "Promotional pathway and departmental examination from Junior Statistical Officer (JSO) cadre.",
+    "source_url": "https://mospi.gov.in/subordinate-statistical-service",
+    "source_name": "Ministry of Statistics and Programme Implementation (MoSPI) Service Rules",
+    "status": "verified",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "career-stat-inv-04",
+    "role_title": "Statistical Investigator Grade-II",
+    "pathway": "Registrar General of India / Central Ministries",
+    "required_skills": ["Demographic Statistics", "Census Enumeration", "Survey Sampling", "Data Entry Audit", "Data Verification"],
+    "required_qualification": "Bachelor's Degree with Statistics as one of the main subjects studied in all the three years or all six semesters.",
+    "entry_route": "Staff Selection Commission (SSC) Combined Graduate Level (CGL) Examination - Paper-II Statistics.",
+    "source_url": "https://ssc.gov.in/statistical-investigator-notice",
+    "source_name": "Staff Selection Commission (SSC) Official Recruitment Notice",
+    "status": "verified",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "career-ncs-portal-05",
+    "role_title": "Public Sector & Private Analytics Openings (National Career Service Gateway)",
+    "pathway": "National Career Service Opportunities",
+    "required_skills": ["Data Analysis with Python and R", "SQL and Databases", "Data Visualisation", "Statistical Inference"],
+    "required_qualification": "Varies by specific vacancy notice; verified through the National Career Service portal agreement.",
+    "entry_route": "Direct application via National Career Service portal (ncs.gov.in) partnered listings.",
+    "source_url": "https://www.ncs.gov.in",
+    "source_name": "Ministry of Labour & Employment - National Career Service",
+    "status": "verified",
+    "last_verified_at": "2026-10-31T00:00:00.000Z"
+  },
+  {
+    "id": "template-unverified-career-01",
+    "role_title": "[TEMPLATE] State Directorate Statistical Assistant",
+    "pathway": "State Statistical Cadre",
+    "required_skills": ["Descriptive Statistics", "State Survey Operations"],
+    "required_qualification": "Bachelor's degree with Statistics/Economics/Mathematics (subject to state service gazette notification).",
+    "entry_route": "State Public Service Commission Examination.",
+    "source_url": "https://www.ncs.gov.in/template-role-verification-pending",
+    "source_name": "Pending State Commission Gazette Verification",
+    "status": "unverified",
+    "last_verified_at": null
+  }
+]

@@ -30,6 +30,12 @@ export const AboutPage: React.FC = () => {
           An AI-powered competency measurement, skill-gap diagnostic, and career development platform
           built for college students, civil servants, and private-sector professionals in India.
         </p>
+        <div className="pt-2">
+          <div className="bg-emerald-950/80 border border-emerald-500/50 rounded-lg p-3 text-emerald-200 text-xs sm:text-sm font-medium flex items-center gap-2">
+            <Shield className="w-4 h-4 text-emerald-400 shrink-0" />
+            <span><strong>Data Integrity Commitment:</strong> Course data comes from official sources, verified and dated. The AI only chooses from it.</span>
+          </div>
+        </div>
       </div>
 
       {/* Problem Statement & Solution */}

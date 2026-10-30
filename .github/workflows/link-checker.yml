@@ -1,0 +1,25 @@
+name: Weekly Link Integrity Checker
+
+on:
+  schedule:
+    # Run every Monday at 04:00 UTC
+    - cron: '0 4 * * 1'
+  workflow_dispatch:
+
+jobs:
+  check-links:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Validate seed schemas
+        run: node scripts/validate-seeds.cjs
+
+      - name: Run link checker
+        run: node scripts/check-links.cjs

@@ -2,6 +2,8 @@ import {
   User,
   LearnerProfile,
   Course,
+  Career,
+  Dataset,
   Opportunity,
   Application,
   Mentor,
@@ -19,6 +21,8 @@ import {
 import {
   SEED_USERS,
   SEED_COURSES,
+  SEED_CAREERS,
+  SEED_DATASETS,
   SEED_OPPORTUNITIES,
   SEED_ORGANISATIONS,
   SEED_MENTORS,
@@ -102,33 +106,7 @@ export const StorageService = {
     storage.save('mentorships', SEED_MENTORSHIPS);
     storage.save('messages', SEED_DIRECT_MESSAGES);
     storage.save('orgEmployees', generateSeedOrgEmployees());
-    storage.save('applications', [
-      {
-        id: 'app-init-1',
-        opportunityId: 'opp-101',
-        opportunityTitle: 'Statistical Analyst & Survey Methodologist (Fellowship)',
-        organisation: 'Ministry of Statistics and Programme Implementation (MoSPI)',
-        userId: 'user-learner-student',
-        userName: 'Aarav Sharma',
-        userEmail: 'aarav.sharma@univ.edu.in',
-        appliedAt: '2026-09-28T11:20:00Z',
-        status: 'Under review',
-        matchPercentage: 82,
-        notes: 'Submitted resume and SWAYAM certification verification ID.',
-      },
-      {
-        id: 'app-init-2',
-        opportunityId: 'opp-104',
-        opportunityTitle: 'Graduate Statistical Apprentice (NEP Skilling Track)',
-        organisation: 'Indian Statistical Institute (ISI)',
-        userId: 'user-learner-student',
-        userName: 'Aarav Sharma',
-        userEmail: 'aarav.sharma@univ.edu.in',
-        appliedAt: '2026-09-29T15:45:00Z',
-        status: 'Submitted',
-        matchPercentage: 78,
-      },
-    ]);
+    storage.save('applications', []); // Fabricated seed opportunities removed per Phase 1
     storage.save('quizzes', []);
     storage.save('chatHistory', [
       {
@@ -343,6 +321,14 @@ export const StorageService = {
   deleteCourse(courseId: string): void {
     const list = this.getCourses().filter((c) => c.id !== courseId);
     storage.save('courses', list);
+  },
+
+  getCareers(): Career[] {
+    return getItem<Career[]>('careers', SEED_CAREERS.filter((c) => c.status === 'verified'));
+  },
+
+  getDatasets(): Dataset[] {
+    return getItem<Dataset[]>('datasets', SEED_DATASETS);
   },
 
   // Opportunities

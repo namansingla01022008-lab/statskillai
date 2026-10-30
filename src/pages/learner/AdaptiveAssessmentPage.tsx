@@ -434,10 +434,19 @@ export const AdaptiveAssessmentPage: React.FC = () => {
           ) : currentQuestion ? (
             <div className="space-y-6">
               <div className="space-y-2">
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-teal-700 bg-teal-50 px-2 py-0.5 rounded">
                     Skill: {currentQuestion.skillTag}
                   </span>
+                  {(currentQuestion as any).isVerified ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
+                      ✓ Expert-verified
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full">
+                      ⚡ AI-generated, not expert-verified
+                    </span>
+                  )}
                 </div>
                 <h2 className="text-base sm:text-lg font-bold text-slate-900 leading-snug">
                   {currentQuestion.question}

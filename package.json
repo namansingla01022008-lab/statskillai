@@ -15,7 +15,11 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:seed": "tsx prisma/seed.ts",
-    "test:rewards": "tsx tests/rewards.test.ts"
+    "test:rewards": "tsx tests/rewards.test.ts",
+    "test:integrity": "tsx tests/data-integrity.test.ts",
+    "seed": "tsx prisma/seed.ts",
+    "seed:validate": "node scripts/validate-seeds.cjs",
+    "links:check": "node scripts/check-links.cjs"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
