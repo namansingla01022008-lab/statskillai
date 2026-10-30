@@ -304,4 +304,255 @@ router.post('/:id/messages', authenticate, async (req: AuthenticatedRequest, res
   }
 });
 
+// POST Book a Live Mentorship Session
+router.post('/book-session', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const studentId = req.user!.userId;
+    const {
+      mentorId,
+      mentorName,
+      mentorTitle,
+      skillDomain,
+      topic,
+      date,
+      timeSlot,
+      price = 10,
+    } = req.body;
+
+    if (!mentorId || !topic || !date || !timeSlot) {
+      return res.status(400).json({ error: 'mentorId, topic, date, and timeSlot are required.' });
+    }
+
+    const sessionId = `session-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const meetingId = `LIVE-${skillDomain?.toUpperCase().slice(0, 4) || 'SKILL'}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const booking = await prisma.mentorshipSessionBooking.create({
+      data: {
+        sessionId,
+        meetingId,
+        studentId,
+        studentName: req.user!.name,
+        mentorId,
+        mentorName: mentorName || 'Verified Mentor',
+        mentorTitle: mentorTitle || 'Mentor Specialist',
+        skillDomain: skillDomain || 'Technical',
+        topic,
+        date,
+        timeSlot,
+        durationMinutes: 5,
+        price: Number(price) || 10,
+        paymentStatus: 'Successful',
+        sessionStatus: 'Upcoming',
+      },
+    });
+
+    // Real-time notification to student
+    notifyUser(studentId, {
+      type: 'SESSION_BOOKED',
+      title: 'Mentorship Session Booked!',
+      message: `Your live session on "${topic}" with ${mentorName} is confirmed for ${date} at ${timeSlot}. Meeting ID: ${meetingId}`,
+      data: { sessionId, meetingId },
+    });
+
+    // Real-time notification to mentor
+    const mentor = await prisma.mentor.findUnique({ where: { id: mentorId } });
+    if (mentor) {
+      notifyUser(mentor.userId, {
+        type: 'NEW_SESSION_BOOKING',
+        title: 'New Live Session Booked',
+        message: `${req.user!.name} booked a session on "${topic}" for ${date} at ${timeSlot}.`,
+        data: { sessionId, meetingId },
+      });
+    }
+
+    res.status(201).json({ success: true, booking });
+  } catch (err: any) {
+    console.error('Book session error:', err);
+    res.status(500).json({ error: 'Failed to book live mentorship session.' });
+  }
+});
+
+// GET Session Details by sessionId or id
+router.get('/sessions/:sessionId', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const booking = await prisma.mentorshipSessionBooking.findFirst({
+      where: {
+        OR: [{ sessionId }, { id: sessionId }, { meetingId: sessionId }],
+      },
+      include: {
+        feedback: true,
+      },
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Session booking not found.' });
+    }
+
+    res.json({ success: true, booking });
+  } catch (err: any) {
+    console.error('Fetch session error:', err);
+    res.status(500).json({ error: 'Failed to fetch session details.' });
+  }
+});
+
+// POST Complete Live Session and Submit Mentor Feedback & Skill Boost
+router.post('/sessions/:sessionId/complete', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const {
+      studentUnderstanding,
+      strengths = [],
+      weaknesses = [],
+      recommendedTopics = [],
+      nextTasks = [],
+      personalMessage = '',
+    } = req.body;
+
+    const booking = await prisma.mentorshipSessionBooking.findFirst({
+      where: {
+        OR: [{ sessionId }, { id: sessionId }, { meetingId: sessionId }],
+      },
+    });
+
+    if (!booking) {
+      return res.status(404).json({ error: 'Session booking not found.' });
+    }
+
+    // Update booking status
+    const updatedBooking = await prisma.mentorshipSessionBooking.update({
+      where: { id: booking.id },
+      data: {
+        sessionStatus: 'Completed',
+        completedAt: new Date(),
+      },
+    });
+
+    // Calculate logical skill bump (+5 points)
+    const domain = booking.skillDomain || 'Technical';
+    const lastAttempt = await prisma.assessmentAttempt.findFirst({
+      where: { userId: booking.studentId, domain },
+      orderBy: { date: 'desc' },
+    });
+    const prevScore = lastAttempt ? lastAttempt.score : 62;
+    const updatedScore = Math.min(98, prevScore + 5);
+
+    // Record updated attempt reflecting mentorship mastery
+    await prisma.assessmentAttempt.create({
+      data: {
+        userId: booking.studentId,
+        domain,
+        score: updatedScore,
+        earnedWeight: Math.round(updatedScore * 0.3),
+        maxWeight: 30,
+        previousScore: prevScore,
+        questions: '[]',
+        userAnswers: '[]',
+        completed: true,
+      },
+    });
+
+    // Create feedback record
+    const feedback = await prisma.mentorshipSessionFeedback.create({
+      data: {
+        bookingId: booking.id,
+        sessionId: booking.sessionId,
+        mentorId: booking.mentorId,
+        studentId: booking.studentId,
+        studentUnderstanding: studentUnderstanding || 'Good foundational comprehension with scope for advanced practice.',
+        strengths: JSON.stringify(strengths),
+        weaknesses: JSON.stringify(weaknesses),
+        recommendedTopics: JSON.stringify(recommendedTopics),
+        nextTasks: JSON.stringify(nextTasks),
+        personalMessage,
+        skillBoostPoints: 5,
+        skillBoostDomain: domain,
+        previousScore: prevScore,
+        updatedScore,
+      },
+    });
+
+    // Notify student
+    notifyUser(booking.studentId, {
+      type: 'SESSION_COMPLETED',
+      title: 'Mentorship Session Completed ✓',
+      message: `Your ${domain} competency progress has been updated (+5%). View your mentor feedback report!`,
+      data: { sessionId: booking.sessionId, updatedScore },
+    });
+
+    res.json({
+      success: true,
+      booking: updatedBooking,
+      feedback: {
+        ...feedback,
+        strengths: JSON.parse(feedback.strengths),
+        weaknesses: JSON.parse(feedback.weaknesses),
+        recommendedTopics: JSON.parse(feedback.recommendedTopics),
+        nextTasks: JSON.parse(feedback.nextTasks),
+      },
+    });
+  } catch (err: any) {
+    console.error('Complete session error:', err);
+    res.status(500).json({ error: 'Failed to complete session.' });
+  }
+});
+
+// POST Submit Review & Rating for Session
+router.post('/sessions/:sessionId/review', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { sessionId } = req.params;
+    const { rating, review, isHelpful } = req.body;
+
+    const feedback = await prisma.mentorshipSessionFeedback.findFirst({
+      where: { sessionId },
+    });
+
+    if (feedback) {
+      await prisma.mentorshipSessionFeedback.update({
+        where: { id: feedback.id },
+        data: {
+          rating: Number(rating) || 5,
+          review: review || '',
+          isHelpful: Boolean(isHelpful),
+        },
+      });
+    }
+
+    res.json({ success: true, message: 'Review recorded successfully.' });
+  } catch (err: any) {
+    console.error('Submit review error:', err);
+    res.status(500).json({ error: 'Failed to record review.' });
+  }
+});
+
+// GET My Sessions (Learner or Mentor)
+router.get('/my-sessions', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user!.userId;
+    const role = req.user!.role;
+
+    let bookings;
+    if (role === 'mentor') {
+      const mentor = await prisma.mentor.findUnique({ where: { userId } });
+      const mentorId = mentor ? mentor.id : userId;
+      bookings = await prisma.mentorshipSessionBooking.findMany({
+        where: { OR: [{ mentorId }, { mentorName: req.user!.name }] },
+        include: { feedback: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    } else {
+      bookings = await prisma.mentorshipSessionBooking.findMany({
+        where: { studentId: userId },
+        include: { feedback: true },
+        orderBy: { createdAt: 'desc' },
+      });
+    }
+
+    res.json({ success: true, bookings });
+  } catch (err: any) {
+    console.error('Fetch my sessions error:', err);
+    res.status(500).json({ error: 'Failed to fetch sessions.' });
+  }
+});
+
 export default router;

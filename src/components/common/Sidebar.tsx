@@ -143,7 +143,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         {/* Navigation list */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {items.map((item) => {
-            const isActive = currentPath === item.path || currentPath.startsWith(item.path + '/');
+            const isActive =
+              currentPath === item.path ||
+              currentPath.startsWith(item.path + '/') ||
+              (item.path === '/mentorship' && currentPath.startsWith('/mentors'));
             const Icon = item.icon;
             return (
               <a

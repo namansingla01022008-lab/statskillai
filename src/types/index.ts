@@ -168,6 +168,12 @@ export interface Application {
   notes?: string;
 }
 
+export interface MentorAvailabilitySlot {
+  id: string;
+  dayOfWeek: string;
+  time: string;
+}
+
 export interface Mentor {
   id: string;
   userId: string;
@@ -183,6 +189,57 @@ export interface Mentor {
   availability: string;
   rating: number;
   totalReviews: number;
+  price?: number; // e.g. 10, 8, 5, 15
+  totalSessions?: number;
+  expertise?: string[];
+  avatarUrl?: string;
+  availableSlots?: MentorAvailabilitySlot[];
+}
+
+export type PaymentStatus = 'Pending' | 'Successful' | 'Failed' | 'Refunded';
+export type LiveSessionStatus = 'Upcoming' | 'Live' | 'Completed' | 'Cancelled';
+
+export interface MentorshipSessionBooking {
+  id: string;
+  sessionId: string;
+  meetingId: string;
+  studentId: string;
+  studentName: string;
+  mentorId: string;
+  mentorName: string;
+  mentorTitle?: string;
+  skillDomain: DomainType;
+  topic: string;
+  date: string;
+  timeSlot: string;
+  durationMinutes: number;
+  price: number;
+  paymentStatus: PaymentStatus;
+  sessionStatus: LiveSessionStatus;
+  createdAt: string;
+  completedAt?: string;
+}
+
+export interface MentorshipFeedbackRecord {
+  id: string;
+  bookingId: string;
+  sessionId: string;
+  mentorId: string;
+  studentId: string;
+  studentUnderstanding: string;
+  strengths: string[];
+  weaknesses: string[];
+  recommendedTopics: string[];
+  nextTasks: string[];
+  personalMessage: string;
+  rating?: number;
+  review?: string;
+  isHelpful?: boolean;
+  skillBoostPoints: number;
+  skillBoostDomain: DomainType;
+  previousScore: number;
+  updatedScore: number;
+  createdAt: string;
 }
 
 export interface Mentorship {
