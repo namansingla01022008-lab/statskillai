@@ -30,6 +30,7 @@ import rewardsRouter from './server/routes/rewards';
 import certificatesRouter from './server/routes/certificates';
 import adminRewardsRouter from './server/routes/adminRewards';
 import { processOutbox } from './server/services/rewardEngine';
+import { ensurePrismaSchema } from './server/services/dbSync';
 
 dotenv.config();
 
@@ -53,6 +54,11 @@ const generalApiLimiter = rateLimit({
 });
 
 async function startServer() {
+  // Auto-sync database schema on production startup
+  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost:5432')) {
+    ensurePrismaSchema().catch((err) => console.warn('[DB Sync Startup Note]:', err));
+  }
+
   const app = express();
   const httpServer = http.createServer(app);
   const PORT = Number(process.env.PORT) || 3000;

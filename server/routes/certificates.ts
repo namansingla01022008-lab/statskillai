@@ -2,8 +2,16 @@ import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { verifyCertificateSubmission } from '../services/certVerification';
+import { ensurePrismaSchema } from '../services/dbSync';
 
 const router = Router();
+
+function isMissingTableError(err: any): boolean {
+  return (
+    err?.code === 'P2021' ||
+    Boolean(err?.message && (err.message.includes('does not exist') || err.message.includes('not exist in the current database')))
+  );
+}
 
 // POST /api/certificates/submit - Submit a certificate for verification
 router.post('/submit', authenticate, requireRole(['learner', 'admin']), async (req: AuthenticatedRequest, res: Response) => {
@@ -23,16 +31,34 @@ router.post('/submit', authenticate, requireRole(['learner', 'admin']), async (r
     const cleanCertId = String(certId).trim();
     const cleanUrl = String(verificationUrl).trim();
 
-    // 2. Duplicate submission check (per-user + provider + certId)
-    const existing = await prisma.certificate.findUnique({
-      where: {
-        userId_provider_certId: {
-          userId,
-          provider: cleanProvider,
-          certId: cleanCertId,
+    // 2. Duplicate submission check (with auto table creation recovery)
+    let existing;
+    try {
+      existing = await prisma.certificate.findUnique({
+        where: {
+          userId_provider_certId: {
+            userId,
+            provider: cleanProvider,
+            certId: cleanCertId,
+          },
         },
-      },
-    });
+      });
+    } catch (findErr: any) {
+      if (isMissingTableError(findErr)) {
+        await ensurePrismaSchema();
+        existing = await prisma.certificate.findUnique({
+          where: {
+            userId_provider_certId: {
+              userId,
+              provider: cleanProvider,
+              certId: cleanCertId,
+            },
+          },
+        });
+      } else {
+        throw findErr;
+      }
+    }
 
     if (existing) {
       return res.status(409).json({
@@ -57,21 +83,44 @@ router.post('/submit', authenticate, requireRole(['learner', 'admin']), async (r
       console.warn('Initial adapter inspection note:', checkErr?.message || checkErr);
     }
 
-    // 4. Save certificate record with PENDING status (awaiting admin verification)
-    const certificate = await prisma.certificate.create({
-      data: {
-        userId,
-        courseName: cleanCourseName,
-        provider: cleanProvider,
-        certId: cleanCertId,
-        verificationUrl: cleanUrl,
-        fileKey: fileKey ? String(fileKey).trim() : null,
-        status: 'PENDING',
-        adminNote: verificationNote,
-        rejectionReason: null,
-        xpAwarded: false,
-      },
-    });
+    // 4. Save certificate record with PENDING status (with auto table creation recovery)
+    let certificate;
+    try {
+      certificate = await prisma.certificate.create({
+        data: {
+          userId,
+          courseName: cleanCourseName,
+          provider: cleanProvider,
+          certId: cleanCertId,
+          verificationUrl: cleanUrl,
+          fileKey: fileKey ? String(fileKey).trim() : null,
+          status: 'PENDING',
+          adminNote: verificationNote,
+          rejectionReason: null,
+          xpAwarded: false,
+        },
+      });
+    } catch (createErr: any) {
+      if (isMissingTableError(createErr)) {
+        await ensurePrismaSchema();
+        certificate = await prisma.certificate.create({
+          data: {
+            userId,
+            courseName: cleanCourseName,
+            provider: cleanProvider,
+            certId: cleanCertId,
+            verificationUrl: cleanUrl,
+            fileKey: fileKey ? String(fileKey).trim() : null,
+            status: 'PENDING',
+            adminNote: verificationNote,
+            rejectionReason: null,
+            xpAwarded: false,
+          },
+        });
+      } else {
+        throw createErr;
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -93,10 +142,23 @@ router.post('/submit', authenticate, requireRole(['learner', 'admin']), async (r
 router.get('/my', authenticate, requireRole(['learner', 'admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user!.userId;
-    const certificates = await prisma.certificate.findMany({
-      where: { userId },
-      orderBy: { submittedAt: 'desc' },
-    });
+    let certificates = [];
+    try {
+      certificates = await prisma.certificate.findMany({
+        where: { userId },
+        orderBy: { submittedAt: 'desc' },
+      });
+    } catch (fetchErr: any) {
+      if (isMissingTableError(fetchErr)) {
+        await ensurePrismaSchema();
+        certificates = await prisma.certificate.findMany({
+          where: { userId },
+          orderBy: { submittedAt: 'desc' },
+        });
+      } else {
+        throw fetchErr;
+      }
+    }
 
     res.json({ success: true, certificates });
   } catch (err: any) {
@@ -112,9 +174,21 @@ router.get('/:id', authenticate, async (req: AuthenticatedRequest, res: Response
     const userId = req.user!.userId;
     const role = req.user!.role;
 
-    const cert = await prisma.certificate.findUnique({
-      where: { id },
-    });
+    let cert;
+    try {
+      cert = await prisma.certificate.findUnique({
+        where: { id },
+      });
+    } catch (fetchErr: any) {
+      if (isMissingTableError(fetchErr)) {
+        await ensurePrismaSchema();
+        cert = await prisma.certificate.findUnique({
+          where: { id },
+        });
+      } else {
+        throw fetchErr;
+      }
+    }
 
     if (!cert) {
       return res.status(404).json({ error: 'Certificate not found.' });

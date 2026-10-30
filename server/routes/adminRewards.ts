@@ -3,6 +3,7 @@ import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
 import { awardXP, manualAdjustXP } from '../services/rewardEngine';
 import { sendUserNotification } from '../socket';
+import { ensurePrismaSchema } from '../services/dbSync';
 
 const router = Router();
 
@@ -138,10 +139,23 @@ router.get('/certificates', async (req: AuthenticatedRequest, res: Response) => 
   try {
     const status = req.query.status as string | undefined;
 
-    const certificates = await prisma.certificate.findMany({
-      where: status ? { status } : undefined,
-      orderBy: { submittedAt: 'desc' },
-    });
+    let certificates: any[] = [];
+    try {
+      certificates = await prisma.certificate.findMany({
+        where: status ? { status } : undefined,
+        orderBy: { submittedAt: 'desc' },
+      });
+    } catch (tableErr: any) {
+      if (tableErr?.code === 'P2021' || tableErr?.message?.includes('does not exist')) {
+        await ensurePrismaSchema();
+        certificates = await prisma.certificate.findMany({
+          where: status ? { status } : undefined,
+          orderBy: { submittedAt: 'desc' },
+        });
+      } else {
+        throw tableErr;
+      }
+    }
 
     // Populate user names
     const userIds = certificates.map((c) => c.userId);
@@ -580,6 +594,16 @@ router.get('/audit-log', async (req: AuthenticatedRequest, res: Response) => {
   } catch (err: any) {
     console.error('Fetch audit log error:', err);
     res.status(500).json({ error: 'Failed to fetch audit logs.' });
+  }
+});
+
+// POST /api/admin/db-sync - Trigger Prisma DB schema push
+router.post('/db-sync', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const success = await ensurePrismaSchema();
+    res.json({ success, message: 'Database schema synchronized with Prisma models.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err?.message || 'Database schema sync failed.' });
   }
 });
 
