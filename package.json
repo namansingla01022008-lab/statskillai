@@ -6,13 +6,16 @@
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
-    "start": "prisma db push --accept-data-loss && tsx prisma/seed.ts && tsx server.ts",
+    "start": "prisma migrate deploy && tsx prisma/seed.ts && tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
-    "prisma:seed": "tsx prisma/seed.ts"
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:seed": "tsx prisma/seed.ts",
+    "test:rewards": "tsx tests/rewards.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

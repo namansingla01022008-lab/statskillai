@@ -15,6 +15,16 @@ import {
   DomainType,
   StepStatus,
   ApplicationStatus,
+  RewardBalance,
+  RewardTransaction,
+  Certificate,
+  Reward,
+  Redemption,
+  Badge,
+  RewardRule,
+  LeaderboardEntry,
+  RewardAuditLog,
+  LearnerStreak,
 } from '../types';
 
 const TOKEN_KEY = 'statskill_jwt_token';
@@ -350,5 +360,180 @@ export const ApiService = {
       body: JSON.stringify(quiz),
     });
     return data.quiz;
+  },
+
+  // 11. Gamified Reward APIs (Learner)
+  async getRewardBalance(): Promise<RewardBalance> {
+    const data = await this.fetchApi<{ success: boolean; balance: number; totalEarned: number; totalRedeemed: number }>('/api/rewards/balance');
+    return {
+      balance: data.balance,
+      totalEarned: data.totalEarned,
+      totalRedeemed: data.totalRedeemed,
+    };
+  },
+
+  async getRewardHistory(page = 1, limit = 20): Promise<{ transactions: RewardTransaction[]; pagination: any }> {
+    const data = await this.fetchApi<{ success: boolean; transactions: RewardTransaction[]; pagination: any }>(
+      `/api/rewards/history?page=${page}&limit=${limit}`
+    );
+    return { transactions: data.transactions, pagination: data.pagination };
+  },
+
+  async getRewardStore(): Promise<Reward[]> {
+    const data = await this.fetchApi<{ success: boolean; rewards: Reward[] }>('/api/rewards/store');
+    return data.rewards;
+  },
+
+  async redeemReward(rewardId: string, idempotencyKey?: string): Promise<{ success: boolean; redemption: Redemption; message: string }> {
+    return this.fetchApi<{ success: boolean; redemption: Redemption; message: string }>('/api/rewards/redeem', {
+      method: 'POST',
+      body: JSON.stringify({ rewardId, idempotencyKey }),
+    });
+  },
+
+  async getMyRedemptions(): Promise<Redemption[]> {
+    const data = await this.fetchApi<{ success: boolean; redemptions: Redemption[] }>('/api/rewards/redemptions');
+    return data.redemptions;
+  },
+
+  async getBadges(): Promise<{ badges: Badge[]; earnedCount: number; totalCount: number }> {
+    const data = await this.fetchApi<{ success: boolean; badges: Badge[]; earnedCount: number; totalCount: number }>('/api/rewards/badges');
+    return { badges: data.badges, earnedCount: data.earnedCount, totalCount: data.totalCount };
+  },
+
+  async getStreak(): Promise<LearnerStreak> {
+    const data = await this.fetchApi<{
+      success: boolean;
+      currentStreak: number;
+      longestStreak: number;
+      totalActiveDays: number;
+      lastActivityDate: string | null;
+    }>('/api/rewards/streak');
+    return {
+      currentStreak: data.currentStreak,
+      longestStreak: data.longestStreak,
+      totalActiveDays: data.totalActiveDays,
+      lastActivityDate: data.lastActivityDate,
+    };
+  },
+
+  async getLeaderboard(period = 'alltime', limit = 10): Promise<{ period: string; leaderboard: LeaderboardEntry[] }> {
+    const data = await this.fetchApi<{ success: boolean; period: string; leaderboard: LeaderboardEntry[] }>(
+      `/api/rewards/leaderboard?period=${period}&limit=${limit}`
+    );
+    return { period: data.period, leaderboard: data.leaderboard };
+  },
+
+  // 12. Certificate APIs (Learner)
+  async submitCertificate(params: {
+    courseName: string;
+    provider: string;
+    certId: string;
+    verificationUrl: string;
+    fileKey?: string;
+  }): Promise<{ success: boolean; certificate: Certificate; message: string }> {
+    return this.fetchApi<{ success: boolean; certificate: Certificate; message: string }>('/api/certificates/submit', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+  },
+
+  async getMyCertificates(): Promise<Certificate[]> {
+    const data = await this.fetchApi<{ success: boolean; certificates: Certificate[] }>('/api/certificates/my');
+    return data.certificates;
+  },
+
+  // 13. Admin Reward Management APIs
+  async adminGetRewards(): Promise<Reward[]> {
+    const data = await this.fetchApi<{ success: boolean; rewards: Reward[] }>('/api/admin/rewards');
+    return data.rewards;
+  },
+
+  async adminCreateReward(reward: Partial<Reward>): Promise<Reward> {
+    const data = await this.fetchApi<{ success: boolean; reward: Reward }>('/api/admin/rewards', {
+      method: 'POST',
+      body: JSON.stringify(reward),
+    });
+    return data.reward;
+  },
+
+  async adminUpdateReward(id: string, updates: Partial<Reward>): Promise<Reward> {
+    const data = await this.fetchApi<{ success: boolean; reward: Reward }>(`/api/admin/rewards/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    return data.reward;
+  },
+
+  async adminDeleteReward(id: string): Promise<void> {
+    await this.fetchApi(`/api/admin/rewards/${id}`, { method: 'DELETE' });
+  },
+
+  async adminGetCertificates(status?: string): Promise<Certificate[]> {
+    const url = status ? `/api/admin/certificates?status=${status}` : '/api/admin/certificates';
+    const data = await this.fetchApi<{ success: boolean; certificates: Certificate[] }>(url);
+    return data.certificates;
+  },
+
+  async adminApproveCertificate(id: string, note?: string): Promise<{ success: boolean; certificate: Certificate; message: string }> {
+    return this.fetchApi<{ success: boolean; certificate: Certificate; message: string }>(`/api/admin/certificates/${id}/approve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ note }),
+    });
+  },
+
+  async adminRejectCertificate(id: string, reason: string, note?: string): Promise<{ success: boolean; certificate: Certificate }> {
+    return this.fetchApi<{ success: boolean; certificate: Certificate }>(`/api/admin/certificates/${id}/reject`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason, note }),
+    });
+  },
+
+  async adminGetTransactions(page = 1, limit = 25, userId?: string, type?: string): Promise<{ transactions: RewardTransaction[]; pagination: any }> {
+    const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (userId) query.append('userId', userId);
+    if (type) query.append('type', type);
+
+    const data = await this.fetchApi<{ success: boolean; transactions: RewardTransaction[]; pagination: any }>(
+      `/api/admin/reward-transactions?${query.toString()}`
+    );
+    return { transactions: data.transactions, pagination: data.pagination };
+  },
+
+  async adminGetRedemptions(): Promise<Redemption[]> {
+    const data = await this.fetchApi<{ success: boolean; redemptions: Redemption[] }>('/api/admin/redemptions');
+    return data.redemptions;
+  },
+
+  async adminRefundRedemption(id: string, reason: string): Promise<{ success: boolean; message: string }> {
+    return this.fetchApi<{ success: boolean; message: string }>(`/api/admin/redemptions/${id}/refund`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+  },
+
+  async adminAdjustXP(targetUserId: string, amount: number, reason: string): Promise<{ success: boolean; newBalance: number; message: string }> {
+    return this.fetchApi<{ success: boolean; newBalance: number; message: string }>('/api/admin/rewards/adjust', {
+      method: 'POST',
+      body: JSON.stringify({ targetUserId, amount, reason }),
+    });
+  },
+
+  async adminGetRewardRules(): Promise<RewardRule[]> {
+    const data = await this.fetchApi<{ success: boolean; rules: RewardRule[] }>('/api/admin/reward-rules');
+    return data.rules;
+  },
+
+  async adminUpdateRewardRule(id: string, updates: Partial<RewardRule>): Promise<RewardRule> {
+    const data = await this.fetchApi<{ success: boolean; rule: RewardRule }>(`/api/admin/reward-rules/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates),
+    });
+    return data.rule;
+  },
+
+  async adminGetAuditLogs(limit = 30): Promise<RewardAuditLog[]> {
+    const data = await this.fetchApi<{ success: boolean; logs: RewardAuditLog[] }>(`/api/admin/audit-log?limit=${limit}`);
+    return data.logs;
   },
 };

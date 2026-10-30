@@ -263,3 +263,140 @@ export interface AppSettings {
   fontSize: 'small' | 'default' | 'large';
   activeUserId: string;
 }
+
+// --- GAMIFIED REWARD SYSTEM TYPES ---
+
+export type RewardTransactionType = 'EARN' | 'DEDUCT' | 'ADJUST' | 'REFUND';
+export type CertificateStatus = 'PENDING' | 'UNDER_REVIEW' | 'APPROVED' | 'REJECTED';
+export type RedemptionStatus = 'PENDING' | 'PROCESSING' | 'SUCCESS' | 'FAILED' | 'CANCELLED' | 'REFUNDED';
+export type RewardCategory = 'VOUCHER' | 'COURSE_ACCESS' | 'SUBSCRIPTION' | 'OTHER';
+export type BadgeTier = 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM';
+
+export interface RewardBalance {
+  balance: number;
+  totalEarned: number;
+  totalRedeemed: number;
+}
+
+export interface RewardTransaction {
+  id: string;
+  userId: string;
+  type: RewardTransactionType;
+  xpAmount: number;
+  eventType?: string;
+  referenceId?: string;
+  idempotencyKey: string;
+  description: string;
+  createdAt: string;
+  user?: {
+    name: string;
+    email: string;
+  };
+}
+
+export interface LearnerStreak {
+  currentStreak: number;
+  longestStreak: number;
+  totalActiveDays: number;
+  lastActivityDate?: string | null;
+}
+
+export interface Certificate {
+  id: string;
+  userId: string;
+  courseName: string;
+  provider: string;
+  certId: string;
+  verificationUrl: string;
+  fileKey?: string | null;
+  status: CertificateStatus;
+  adminNote?: string | null;
+  rejectionReason?: string | null;
+  submittedAt: string;
+  verifiedAt?: string | null;
+  xpAwarded: boolean;
+  user?: {
+    name: string;
+    email: string;
+    department?: string;
+  };
+}
+
+export interface Reward {
+  id: string;
+  name: string;
+  brand: string;
+  category: RewardCategory;
+  description: string;
+  xpCost: number;
+  stock: number;
+  isActive: boolean;
+  imageUrl?: string | null;
+  requiresReview: boolean;
+  createdAt?: string;
+  _count?: {
+    redemptions: number;
+  };
+}
+
+export interface Redemption {
+  id: string;
+  userId: string;
+  rewardId: string;
+  reward?: Reward;
+  xpSpent: number;
+  status: RedemptionStatus;
+  voucherCode?: string | null;
+  failureReason?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+  user?: {
+    name: string;
+    email: string;
+    department?: string;
+  };
+}
+
+export interface Badge {
+  id?: string;
+  key: string;
+  name: string;
+  description: string;
+  iconName: string;
+  tier: BadgeTier;
+  xpBonus: number;
+  isEarned?: boolean;
+  earnedAt?: string | null;
+}
+
+export interface RewardRule {
+  id: string;
+  eventType: string;
+  label: string;
+  xpAmount: number;
+  isActive: boolean;
+  dailyCap?: number | null;
+  totalCap?: number | null;
+  description: string;
+  updatedAt?: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  displayName: string;
+  department: string;
+  xp: number;
+  badgeCount: number;
+}
+
+export interface RewardAuditLog {
+  id: string;
+  actorId: string;
+  actorRole: string;
+  targetUserId?: string | null;
+  action: string;
+  detail: string;
+  createdAt: string;
+}
+
