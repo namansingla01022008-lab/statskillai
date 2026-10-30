@@ -164,12 +164,7 @@ export const OfflineStorage = {
       await deleteDB(DB_NAME);
       console.info('[OfflineStorage] IndexedDB purged successfully.');
 
-      // Purge CacheStorage API entries (service worker HTTP caches)
-      if (typeof window !== 'undefined' && 'caches' in window) {
-        const cacheKeys = await window.caches.keys();
-        await Promise.all(cacheKeys.map((name) => window.caches.delete(name)));
-        console.info('[OfflineStorage] CacheStorage entries purged.');
-      }
+// Preserve CacheStorage for PWA precached app shell
     } catch (err) {
       console.warn('[OfflineStorage] Error wiping offline data:', err);
     }

@@ -1,3 +1,4 @@
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ApiService } from '../../services/apiService';
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react';
 
 export const CertificatesPage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const { currentUser } = useApp();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [courseName, setCourseName] = useState('');
@@ -230,11 +232,11 @@ export const CertificatesPage: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !isOnline}
               className="w-full mt-2 py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-bold text-xs shadow-xs transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
             >
               <Send className="w-4 h-4" />
-              <span>{isSubmitting ? 'Validating...' : 'Submit for Review (+200 XP)'}</span>
+              <span>{!isOnline ? 'Connect to Submit (Online Only)' : isSubmitting ? 'Validating...' : 'Submit for Review (+200 XP)'}</span>
             </button>
           </form>
         </div>

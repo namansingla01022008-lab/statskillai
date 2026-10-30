@@ -1,3 +1,4 @@
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
@@ -38,6 +39,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
 };
 
 export const RewardsPage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const { currentUser } = useApp();
   const [balance, setBalance] = useState<RewardBalance>({ balance: 0, totalEarned: 0, totalRedeemed: 0 });
   const [streak, setStreak] = useState<LearnerStreak>({ currentStreak: 0, longestStreak: 0, totalActiveDays: 0 });

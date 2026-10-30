@@ -1,3 +1,4 @@
+import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { ApiService } from '../../services/apiService';
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 
 export const RewardStorePage: React.FC = () => {
+  const { isOnline } = useNetworkStatus();
   const { currentUser } = useApp();
   const [rewards, setRewards] = useState<Reward[]>([]);
   const [redemptions, setRedemptions] = useState<Redemption[]>([]);

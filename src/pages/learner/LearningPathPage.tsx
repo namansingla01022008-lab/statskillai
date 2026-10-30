@@ -50,11 +50,18 @@ export const LearningPathPage: React.FC = () => {
         console.warn('[LearningPath] Live fetch failed, reading offline cache:', err);
       }
 
-      // Offline fallback: read from IndexedDB cache
+      // Offline fallback: read from IndexedDB cache or fallback storage
       const cached = await OfflineStorage.getCache<LearningPath>('learning_path');
       if (cached && isMounted) {
         setLearningPath(cached.data);
         setCachedAt(cached.cachedAt);
+      } else if (isMounted) {
+        const localPath = StorageService.getLearningPath(currentUser.id);
+        if (localPath) {
+          setLearningPath(localPath);
+          setCachedAt(Date.now());
+          await OfflineStorage.setCache('learning_path', localPath, currentUser.id).catch(() => {});
+        }
       }
     }
 

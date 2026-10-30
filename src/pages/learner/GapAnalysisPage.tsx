@@ -52,6 +52,13 @@ export const GapAnalysisPage: React.FC = () => {
       if (cached && isMounted) {
         setAnalysis(cached.data);
         setCachedAt(cached.cachedAt);
+      } else if (isMounted) {
+        const localGaps = StorageService.getGapAnalysis(currentUser.id);
+        if (localGaps) {
+          setAnalysis(localGaps);
+          setCachedAt(Date.now());
+          await OfflineStorage.setCache('gap_analysis', localGaps, currentUser.id).catch(() => {});
+        }
       }
     }
     syncGaps();

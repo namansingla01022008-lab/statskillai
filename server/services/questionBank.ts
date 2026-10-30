@@ -198,6 +198,21 @@ export const AUTHORITATIVE_QUESTIONS: AuthoritativeQuestion[] = [
     skillTag: 'Open Digital Architecture',
   },
   {
+    id: 'off-dig-m2',
+    domain: 'Digital',
+    difficulty: 'Medium',
+    question: 'In India’s Data Empowerment and Protection Architecture (DEPA), what role does an Account Aggregator (AA) perform?',
+    options: [
+      'Acts as a consent manager to facilitate encrypted, user-approved data sharing without seeing the data payload',
+      'Stores citizen bank passwords on a central government mainframe',
+      'Acts as a credit rating agency that determines interest rates',
+      'Deletes citizen identity documents after 30 days',
+    ],
+    correctIndex: 0,
+    explanation: 'Account Aggregators are consent-driven data blind pipelines that facilitate seamless, encrypted data transfer with explicit user authorization.',
+    skillTag: 'DEPA Architecture',
+  },
+  {
     id: 'off-dig-h1',
     domain: 'Digital',
     difficulty: 'Hard',
@@ -258,6 +273,21 @@ export const AUTHORITATIVE_QUESTIONS: AuthoritativeQuestion[] = [
     correctIndex: 0,
     explanation: 'Effective policy translation bridges quantitative rigor with intuitive, decision-oriented narratives and visual representations.',
     skillTag: 'Policy Communication',
+  },
+  {
+    id: 'off-beh-m2',
+    domain: 'Behavioural',
+    difficulty: 'Medium',
+    question: 'In public procurement and government contracting (e.g. Government e-Marketplace / GeM), which principle is paramount to preventing conflicts of interest?',
+    options: [
+      'Transparent competitive bidding, strict recusal where personal interest exists, and auditable evaluation criteria',
+      'Awarding contracts directly to close family associates without tenders',
+      'Refusing to publish vendor selection criteria',
+      'Altering technical specifications after bidding has closed',
+    ],
+    correctIndex: 0,
+    explanation: 'Public procurement ethics demand full disclosure, competitive transparency, and recusal to prevent conflicts of interest and maintain public trust.',
+    skillTag: 'Ethics & Governance',
   },
   {
     id: 'off-beh-h1',

@@ -1,3 +1,4 @@
+import { PRELOADED_OFFLINE_QUESTIONS } from '../../constants/offlineQuestions';
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../context/AppContext';
 import { StorageService } from '../../services/storageService';
@@ -134,11 +135,9 @@ export const AdaptiveAssessmentPage: React.FC = () => {
       let domainQuestions = (cached?.data || []).filter((q: any) => q.domain === domain);
 
       if (domainQuestions.length === 0) {
-        try {
-          const fetched = await ApiService.getOfflineQuestions();
-          await OfflineStorage.setCache('offline_questions', fetched, currentUser.id);
-          domainQuestions = fetched.filter((q: any) => q.domain === domain);
-        } catch {}
+        // Instant fallback to client-safe preloaded question set
+        domainQuestions = (PRELOADED_OFFLINE_QUESTIONS as any[]).filter((q: any) => q.domain === domain);
+        OfflineStorage.setCache('offline_questions', PRELOADED_OFFLINE_QUESTIONS, currentUser.id).catch(() => {});
       }
 
       const selected5 = domainQuestions.slice(0, 5);
@@ -384,7 +383,7 @@ export const AdaptiveAssessmentPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500">
-                Question {currentQuestionIndex + 1} of 5
+                Question {currentQuestionIndex + 1} of {isOfflineAttempt ? offlineQuestionsList.length : 5}
               </span>
               <span className="text-slate-300">•</span>
               <span className="text-xs font-bold text-slate-900">{selectedDomain} Domain</span>
@@ -537,7 +536,7 @@ export const AdaptiveAssessmentPage: React.FC = () => {
                     onClick={() => handleConfirmAnswer(false)}
                     className="inline-flex items-center gap-2 px-6 py-2.5 rounded-lg bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs shadow-xs disabled:opacity-50 transition-colors"
                   >
-                    <span>{currentQuestionIndex === 4 ? 'Submit Offline Assessment' : 'Next Question'}</span>
+                    <span>{currentQuestionIndex >= (offlineQuestionsList.length - 1) ? 'Submit Offline Assessment' : 'Next Question'}</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : !isAnswerSubmitted ? (
@@ -592,7 +591,7 @@ export const AdaptiveAssessmentPage: React.FC = () => {
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Questions Completed:</span>
-                <strong className="text-slate-900">5 / 5</strong>
+                <strong className="text-slate-900">{offlineAnswers.length} / {offlineQuestionsList.length || 5}</strong>
               </div>
               <div className="flex justify-between text-slate-600">
                 <span>Sync Status:</span>

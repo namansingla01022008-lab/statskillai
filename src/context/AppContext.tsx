@@ -88,24 +88,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         } catch (err: any) {
           console.warn('Session verification failed, checking offline fallback:', err);
-          const isNetworkError = typeof navigator !== 'undefined' && (!navigator.onLine || err.message?.includes('fetch') || err.message?.includes('NetworkError'));
-          const cachedUser = await OfflineStorage.getCache<{ name: string; role: string }>('user_minimal');
-          if (isNetworkError && cachedUser) {
-            console.info('[AppContext] Active offline authenticated session detected.');
-            setIsAuthenticated(true);
-            setCurrentUser((prev) => ({
-              ...prev,
-              name: cachedUser.data.name,
-              role: cachedUser.data.role as any,
-            }));
-          } else {
+          const isExplicitAuthReject =
+            err?.message?.includes('401') ||
+            err?.message?.includes('Invalid token') ||
+            err?.message?.includes('Unauthorized');
+
+          if (isExplicitAuthReject) {
             setIsAuthenticated(false);
             ApiService.clearToken();
             await OfflineStorage.wipeAllOfflineData();
+          } else {
+            // Network unreachable / offline mode: maintain authenticated offline session!
+            console.info('[AppContext] Network unreachable, maintaining authenticated offline session.');
+            setIsAuthenticated(true);
+            const cachedUser = await OfflineStorage.getCache<{ name: string; role: string }>('user_minimal');
+            if (cachedUser) {
+              setCurrentUser((prev) => ({
+                ...prev,
+                name: cachedUser.data.name || prev.name,
+                role: (cachedUser.data.role as any) || prev.role,
+              }));
+            }
           }
         }
       } else {
-        setIsAuthenticated(false);
+        // When offline or in demo mode without a token, allow active user to remain authenticated
+        const activeUser = StorageService.getActiveUser();
+        if (activeUser && activeUser.id) {
+          setCurrentUser(activeUser);
+          setIsAuthenticated(true);
+        } else {
+          setIsAuthenticated(false);
+        }
       }
       setIsLoadingAuth(false);
       setIsReady(true);
