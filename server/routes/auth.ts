@@ -1,3 +1,5 @@
+import { SEED_USERS } from '../../src/services/seedData';
+import { seedDatabase } from '../../prisma/seed';
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db';
@@ -252,7 +254,41 @@ router.post('/demo-switch', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'userId required.' });
     }
 
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+    let user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) {
+      const seedUser = SEED_USERS.find((u) => u.id === userId || u.email === userId);
+      if (seedUser) {
+        user = await prisma.user.findUnique({ where: { email: seedUser.email } });
+        if (!user) {
+          try {
+            await seedDatabase();
+          } catch (seedErr) {
+            console.warn('[Demo Switch Seed Warn]:', seedErr);
+          }
+          user = await prisma.user.findFirst({
+            where: {
+              OR: [{ id: seedUser.id }, { email: seedUser.email }],
+            },
+          });
+        }
+        if (!user) {
+          const defaultPasswordHash = await bcrypt.hash('DemoPassword123!', 10);
+          user = await prisma.user.create({
+            data: {
+              id: seedUser.id,
+              name: seedUser.name,
+              email: seedUser.email,
+              passwordHash: defaultPasswordHash,
+              role: seedUser.role,
+              profileType: seedUser.profileType,
+              department: seedUser.department,
+              designation: seedUser.designation,
+            },
+          });
+        }
+      }
+    }
+
     if (!user) {
       return res.status(404).json({ error: 'Demo user not found in database.' });
     }

@@ -1,3 +1,4 @@
+import { seedDatabase } from '../../prisma/seed';
 import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest } from '../middleware/auth';
@@ -597,10 +598,13 @@ router.get('/audit-log', async (req: AuthenticatedRequest, res: Response) => {
   }
 });
 
-// POST /api/admin/db-sync - Trigger Prisma DB schema push
+// POST /api/admin/db-sync - Trigger Prisma DB schema push and optional factory seed
 router.post('/db-sync', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const success = await ensurePrismaSchema();
+    if (req.body?.seed) {
+      await seedDatabase();
+    }
     res.json({ success, message: 'Database schema synchronized with Prisma models.' });
   } catch (err: any) {
     res.status(500).json({ error: err?.message || 'Database schema sync failed.' });

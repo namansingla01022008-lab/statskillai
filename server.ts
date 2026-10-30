@@ -11,7 +11,8 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 
 // Database & Socket.io
-import { checkDatabaseConnection } from './server/db';
+import { checkDatabaseConnection, prisma } from './server/db';
+import { seedDatabase } from './prisma/seed';
 import { initSocketIO } from './server/socket';
 
 // Modular Routers
@@ -54,9 +55,22 @@ const generalApiLimiter = rateLimit({
 });
 
 async function startServer() {
-  // Auto-sync database schema on production startup
-  if (process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('localhost:5432')) {
-    ensurePrismaSchema().catch((err) => console.warn('[DB Sync Startup Note]:', err));
+  // Auto-sync database schema and seed factory records on startup
+  if (process.env.DATABASE_URL) {
+    ensurePrismaSchema()
+      .then(async () => {
+        try {
+          const adminCount = await prisma.user.count({ where: { role: 'admin' } });
+          const certCount = await prisma.certificate.count();
+          if (adminCount === 0 || certCount === 0) {
+            console.log('[Startup Seed] Seeding missing factory users and certificates...');
+            await seedDatabase();
+          }
+        } catch (seedErr) {
+          console.warn('[Startup Seed Note]:', seedErr);
+        }
+      })
+      .catch((err) => console.warn('[DB Sync Startup Note]:', err));
   }
 
   const app = express();
