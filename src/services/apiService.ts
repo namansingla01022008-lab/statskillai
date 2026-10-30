@@ -27,9 +27,13 @@ import {
   LearnerStreak,
   Career,
   Dataset,
+  MentorshipSessionBooking,
+  MentorshipFeedbackRecord,
+  MentorAvailabilitySlot,
 } from '../types';
 
 import { SEED_CAREERS, SEED_DATASETS } from './seedData';
+import { StorageService } from './storageService';
 
 const TOKEN_KEY = 'statskill_jwt_token';
 
@@ -361,6 +365,175 @@ export const ApiService = {
       body: JSON.stringify({ text }),
     });
     return data.message;
+  },
+
+  // Live Mentorship Session APIs
+  async bookMentorshipSession(bookingData: {
+    mentorId: string;
+    mentorName: string;
+    mentorTitle?: string;
+    skillDomain: string;
+    topic: string;
+    date: string;
+    timeSlot: string;
+    price?: number;
+    studentId?: string;
+    studentName?: string;
+  }): Promise<MentorshipSessionBooking> {
+    try {
+      const data = await this.fetchApi<{ success: boolean; booking: MentorshipSessionBooking }>(
+        '/api/mentorship/book-session',
+        {
+          method: 'POST',
+          body: JSON.stringify(bookingData),
+        }
+      );
+      if (data?.booking) {
+        StorageService.saveSessionBooking(data.booking);
+        return data.booking;
+      }
+    } catch (err) {
+      console.warn('Backend bookMentorshipSession fallback to StorageService:', err);
+    }
+
+    const sessionId = `session-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    const meetingId = `LIVE-${bookingData.skillDomain?.toUpperCase().slice(0, 4) || 'SKILL'}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const localBooking: MentorshipSessionBooking = {
+      id: `booking-${Date.now()}`,
+      sessionId,
+      meetingId,
+      studentId: bookingData.studentId || 'user-learner-student',
+      studentName: bookingData.studentName || 'Aarav Sharma',
+      mentorId: bookingData.mentorId,
+      mentorName: bookingData.mentorName,
+      mentorTitle: bookingData.mentorTitle || 'Verified Mentor Specialist',
+      skillDomain: (bookingData.skillDomain as any) || 'Technical',
+      topic: bookingData.topic,
+      date: bookingData.date,
+      timeSlot: bookingData.timeSlot,
+      durationMinutes: 5,
+      price: bookingData.price || 10,
+      paymentStatus: 'Successful',
+      sessionStatus: 'Upcoming',
+      createdAt: new Date().toISOString(),
+    };
+    StorageService.saveSessionBooking(localBooking);
+    return localBooking;
+  },
+
+  async getSessionBooking(sessionId: string): Promise<MentorshipSessionBooking | null> {
+    try {
+      const data = await this.fetchApi<{ success: boolean; booking: MentorshipSessionBooking }>(
+        `/api/mentorship/sessions/${sessionId}`
+      );
+      if (data?.booking) return data.booking;
+    } catch {}
+    return StorageService.getSessionBooking(sessionId);
+  },
+
+  async getMySessionBookings(userId?: string): Promise<MentorshipSessionBooking[]> {
+    try {
+      const data = await this.fetchApi<{ success: boolean; bookings: MentorshipSessionBooking[] }>(
+        '/api/mentorship/my-sessions'
+      );
+      if (data?.bookings) return data.bookings;
+    } catch {}
+    return StorageService.getSessionBookings().filter(
+      (b) => !userId || b.studentId === userId || b.mentorId === userId
+    );
+  },
+
+  async completeLiveSession(
+    sessionId: string,
+    feedbackData: {
+      studentUnderstanding: string;
+      strengths: string[];
+      weaknesses: string[];
+      recommendedTopics: string[];
+      nextTasks: string[];
+      personalMessage: string;
+      domain?: string;
+      userId?: string;
+    }
+  ): Promise<{ booking: MentorshipSessionBooking; feedback: MentorshipFeedbackRecord }> {
+    try {
+      const data = await this.fetchApi<{
+        success: boolean;
+        booking: MentorshipSessionBooking;
+        feedback: MentorshipFeedbackRecord;
+      }>(`/api/mentorship/sessions/${sessionId}/complete`, {
+        method: 'POST',
+        body: JSON.stringify(feedbackData),
+      });
+      if (data?.booking && data?.feedback) {
+        StorageService.updateSessionBookingStatus(sessionId, 'Completed');
+        StorageService.saveSessionFeedback(data.feedback);
+        return { booking: data.booking, feedback: data.feedback };
+      }
+    } catch (err) {
+      console.warn('Backend completeLiveSession fallback to StorageService:', err);
+    }
+
+    StorageService.updateSessionBookingStatus(sessionId, 'Completed');
+    const existing = StorageService.getSessionBooking(sessionId);
+    const domain = (existing?.skillDomain || feedbackData.domain || 'Technical') as any;
+    const studentId = existing?.studentId || feedbackData.userId || 'user-learner-student';
+
+    // Apply logical skill boost
+    const { previousScore, updatedScore } = StorageService.applyMentorshipSkillBoost(studentId, domain, 5);
+
+    const feedback: MentorshipFeedbackRecord = {
+      id: `fb-${Date.now()}`,
+      bookingId: existing?.id || `booking-${sessionId}`,
+      sessionId,
+      mentorId: existing?.mentorId || 'mentor-rahul',
+      studentId,
+      studentUnderstanding: feedbackData.studentUnderstanding,
+      strengths: feedbackData.strengths,
+      weaknesses: feedbackData.weaknesses,
+      recommendedTopics: feedbackData.recommendedTopics,
+      nextTasks: feedbackData.nextTasks,
+      personalMessage: feedbackData.personalMessage,
+      skillBoostPoints: 5,
+      skillBoostDomain: domain,
+      previousScore,
+      updatedScore,
+      createdAt: new Date().toISOString(),
+    };
+    StorageService.saveSessionFeedback(feedback);
+
+    const updatedBooking = StorageService.getSessionBooking(sessionId)!;
+    return { booking: updatedBooking, feedback };
+  },
+
+  async submitSessionReview(
+    sessionId: string,
+    ratingData: { rating: number; review?: string; isHelpful?: boolean; mentorId?: string }
+  ): Promise<void> {
+    try {
+      await this.fetchApi(`/api/mentorship/sessions/${sessionId}/review`, {
+        method: 'POST',
+        body: JSON.stringify(ratingData),
+      });
+    } catch {}
+
+    const fb = StorageService.getSessionFeedback(sessionId);
+    if (fb) {
+      fb.rating = ratingData.rating;
+      fb.review = ratingData.review;
+      fb.isHelpful = ratingData.isHelpful;
+      StorageService.saveSessionFeedback(fb);
+    }
+
+    const booking = StorageService.getSessionBooking(sessionId);
+    const mId = ratingData.mentorId || booking?.mentorId;
+    if (mId) {
+      StorageService.saveMentorReview(mId, ratingData.rating, ratingData.review);
+    }
+  },
+
+  async updateMentorAvailabilitySlots(mentorId: string, slots: MentorAvailabilitySlot[]): Promise<void> {
+    StorageService.updateMentorAvailability(mentorId, slots);
   },
 
   // 9. Analytics APIs

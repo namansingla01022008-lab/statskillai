@@ -23,6 +23,7 @@ import { LearningPathPage } from './pages/learner/LearningPathPage';
 import { QuizGeneratorPage } from './pages/learner/QuizGeneratorPage';
 import { OpportunitiesPage } from './pages/learner/OpportunitiesPage';
 import { MentorshipPage } from './pages/learner/MentorshipPage';
+import { LiveMentorshipSessionPage } from './pages/learner/LiveMentorshipSessionPage';
 import { RewardsPage } from './pages/learner/RewardsPage';
 import { RewardStorePage } from './pages/learner/RewardStorePage';
 import { CertificatesPage } from './pages/learner/CertificatesPage';
@@ -212,6 +213,22 @@ export default function App() {
               element={
                 <ProtectedRoute allowedRoles={['learner']}>
                   <MentorshipPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mentors"
+              element={
+                <ProtectedRoute allowedRoles={['learner']}>
+                  <MentorshipPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/mentorship/session/:sessionId"
+              element={
+                <ProtectedRoute allowedRoles={['learner', 'mentor', 'admin']}>
+                  <LiveMentorshipSessionPage />
                 </ProtectedRoute>
               }
             />

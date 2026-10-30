@@ -17,6 +17,9 @@ import {
   LearningPath,
   AppSettings,
   DomainType,
+  MentorshipSessionBooking,
+  MentorshipFeedbackRecord,
+  MentorAvailabilitySlot,
 } from '../types';
 import {
   SEED_USERS,
@@ -32,6 +35,8 @@ import {
   SEED_INITIAL_LEARNING_PATH,
   SEED_MENTORSHIPS,
   SEED_DIRECT_MESSAGES,
+  SEED_SESSION_BOOKINGS,
+  SEED_SESSION_FEEDBACKS,
   generateSeedOrgEmployees,
 } from './seedData';
 import { storage } from './storage';
@@ -104,6 +109,8 @@ export const StorageService = {
     storage.save('gapAnalyses', SEED_INITIAL_GAPS);
     storage.save('learningPaths', SEED_INITIAL_LEARNING_PATH);
     storage.save('mentorships', SEED_MENTORSHIPS);
+    storage.save('sessionBookings', SEED_SESSION_BOOKINGS);
+    storage.save('sessionFeedbacks', SEED_SESSION_FEEDBACKS);
     storage.save('messages', SEED_DIRECT_MESSAGES);
     storage.save('orgEmployees', generateSeedOrgEmployees());
     storage.save('applications', []); // Fabricated seed opportunities removed per Phase 1
@@ -482,5 +489,134 @@ export const StorageService = {
   // Organization Employees (Admin Analytics)
   getOrgEmployees(): OrgEmployee[] {
     return getItem<OrgEmployee[]>('orgEmployees', generateSeedOrgEmployees());
+  },
+
+  // Live Mentorship Session Bookings
+  getSessionBookings(): MentorshipSessionBooking[] {
+    return getItem<MentorshipSessionBooking[]>('sessionBookings', SEED_SESSION_BOOKINGS);
+  },
+
+  getLearnerSessionBookings(learnerId: string): MentorshipSessionBooking[] {
+    return this.getSessionBookings().filter((b) => b.studentId === learnerId);
+  },
+
+  getMentorSessionBookings(mentorUserIdOrId: string): MentorshipSessionBooking[] {
+    return this.getSessionBookings().filter(
+      (b) => b.mentorId === mentorUserIdOrId || b.mentorId.includes(mentorUserIdOrId)
+    );
+  },
+
+  getSessionBooking(sessionId: string): MentorshipSessionBooking | null {
+    const list = this.getSessionBookings();
+    return list.find((b) => b.sessionId === sessionId || b.id === sessionId || b.meetingId === sessionId) || null;
+  },
+
+  saveSessionBooking(booking: MentorshipSessionBooking): void {
+    const list = this.getSessionBookings();
+    const idx = list.findIndex((b) => b.id === booking.id || b.sessionId === booking.sessionId);
+    if (idx >= 0) {
+      list[idx] = booking;
+    } else {
+      list.unshift(booking);
+    }
+    storage.save('sessionBookings', list);
+  },
+
+  updateSessionBookingStatus(sessionId: string, status: MentorshipSessionBooking['sessionStatus']): void {
+    const list = this.getSessionBookings();
+    const item = list.find((b) => b.sessionId === sessionId || b.id === sessionId);
+    if (item) {
+      item.sessionStatus = status;
+      if (status === 'Completed') {
+        item.completedAt = new Date().toISOString();
+      }
+      storage.save('sessionBookings', list);
+    }
+  },
+
+  // Mentorship Feedback Records
+  getSessionFeedback(sessionId: string): MentorshipFeedbackRecord | null {
+    const all = getItem<Record<string, MentorshipFeedbackRecord>>('sessionFeedbacks', SEED_SESSION_FEEDBACKS);
+    return all[sessionId] || null;
+  },
+
+  saveSessionFeedback(feedback: MentorshipFeedbackRecord): void {
+    const all = getItem<Record<string, MentorshipFeedbackRecord>>('sessionFeedbacks', SEED_SESSION_FEEDBACKS);
+    all[feedback.sessionId] = feedback;
+    storage.save('sessionFeedbacks', all);
+  },
+
+  // Mentor Availability Management
+  updateMentorAvailability(mentorId: string, slots: MentorAvailabilitySlot[]): void {
+    const mentors = this.getMentors();
+    const m = mentors.find((item) => item.id === mentorId || item.userId === mentorId);
+    if (m) {
+      m.availableSlots = slots;
+      storage.save('mentors', mentors);
+    }
+  },
+
+  saveMentorReview(mentorId: string, rating: number, review?: string): void {
+    const mentors = this.getMentors();
+    const m = mentors.find((item) => item.id === mentorId || item.userId === mentorId);
+    if (m) {
+      const currentTotal = m.totalReviews || 0;
+      const currentAvg = m.rating || 5.0;
+      const newTotal = currentTotal + 1;
+      const newAvg = Number(((currentAvg * currentTotal + rating) / newTotal).toFixed(1));
+      m.rating = newAvg;
+      m.totalReviews = newTotal;
+      m.totalSessions = (m.totalSessions || 0) + 1;
+      storage.save('mentors', mentors);
+    }
+  },
+
+  // Logical Skill Progress Boost upon Mentorship Completion
+  applyMentorshipSkillBoost(
+    userId: string,
+    domain: DomainType,
+    points: number = 5
+  ): { previousScore: number; updatedScore: number } {
+    const currentScores = this.getLatestDomainScores(userId);
+    const prev = currentScores[domain] || 62;
+    const nextScore = Math.min(98, prev + points);
+
+    // 1. Record an updated assessment attempt with explicit previousScore
+    const attempt: AssessmentAttempt = {
+      id: `boost-${Date.now()}`,
+      userId,
+      domain,
+      date: new Date().toISOString(),
+      questions: [],
+      userAnswers: [],
+      score: nextScore,
+      earnedWeight: Math.round(nextScore * 0.3),
+      maxWeight: 30,
+      previousScore: prev,
+      completed: true,
+    };
+    this.saveAttempt(attempt);
+
+    // 2. Synchronize GapAnalysis so radar and gap widgets immediately reflect growth
+    const gapAnalysis = this.getGapAnalysis(userId);
+    if (gapAnalysis) {
+      gapAnalysis.domainScores[domain] = nextScore;
+      // Filter out or downgrade resolved gaps in this domain
+      gapAnalysis.gaps = gapAnalysis.gaps.filter(
+        (g) => !(g.domain === domain && nextScore >= (gapAnalysis.targetScores[domain] || 70))
+      );
+      if (!gapAnalysis.strengths.includes(`${domain} Mentorship Guided Mastery`)) {
+        gapAnalysis.strengths.unshift(`${domain} Mentorship Guided Mastery`);
+      }
+      gapAnalysis.overallScore = Math.round(
+        (gapAnalysis.domainScores.Technical +
+          gapAnalysis.domainScores.Statistical +
+          gapAnalysis.domainScores.Digital +
+          gapAnalysis.domainScores.Behavioural) / 4
+      );
+      this.saveGapAnalysis(gapAnalysis);
+    }
+
+    return { previousScore: prev, updatedScore: nextScore };
   },
 };

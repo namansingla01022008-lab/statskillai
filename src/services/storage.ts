@@ -88,8 +88,6 @@ export const storage = {
    * Handles QuotaExceededError via automated LRU/expiry eviction.
    */
   save<T>(key: string, value: T, ttlMs: number = DEFAULT_TTL_MS): boolean {
-    if (!isStorageAvailable()) return false;
-
     const fullKey = getFullKey(key);
     const now = Date.now();
     const envelope: StorageEnvelope<T> = {
@@ -100,6 +98,8 @@ export const storage = {
 
     // Update in-memory hot cache immediately
     memoryCache.set(fullKey, { value, expiry: envelope.t });
+
+    if (!isStorageAvailable()) return true;
 
     try {
       const serialized = JSON.stringify(envelope);
@@ -154,8 +154,6 @@ export const storage = {
    * Deletes expired entries on read. Returns null if missing, expired, or invalid.
    */
   load<T>(key: string): T | null {
-    if (!isStorageAvailable()) return null;
-
     const fullKey = getFullKey(key);
     const now = Date.now();
 
@@ -170,6 +168,8 @@ export const storage = {
       this.remove(key);
       return null;
     }
+
+    if (!isStorageAvailable()) return null;
 
     // 2. Read from localStorage
     try {
