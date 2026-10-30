@@ -90,3 +90,6 @@ export function notifyUser(userId: string, notification: { type: string; title: 
     io.to(`user:${userId}`).emit('user_notification', notification);
   }
 }
+
+export const sendUserNotification = notifyUser;
+

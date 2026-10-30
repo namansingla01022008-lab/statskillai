@@ -21,6 +21,9 @@ import { LearningPathPage } from './pages/learner/LearningPathPage';
 import { QuizGeneratorPage } from './pages/learner/QuizGeneratorPage';
 import { OpportunitiesPage } from './pages/learner/OpportunitiesPage';
 import { MentorshipPage } from './pages/learner/MentorshipPage';
+import { RewardsPage } from './pages/learner/RewardsPage';
+import { RewardStorePage } from './pages/learner/RewardStorePage';
+import { CertificatesPage } from './pages/learner/CertificatesPage';
 
 // Mentor Pages
 import { MentorDashboard } from './pages/mentor/MentorDashboard';
@@ -28,6 +31,7 @@ import { MenteeDetailPage } from './pages/mentor/MenteeDetailPage';
 
 // Admin Pages
 import { AdminAnalyticsPage } from './pages/admin/AdminAnalyticsPage';
+import { AdminRewardsPage } from './pages/admin/AdminRewardsPage';
 import { AdminCatalogPage } from './pages/admin/AdminCatalogPage';
 import { AdminApplicantsPage } from './pages/admin/AdminApplicantsPage';
 import { AdminMentorsPage } from './pages/admin/AdminMentorsPage';
@@ -204,6 +208,30 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/rewards"
+              element={
+                <ProtectedRoute allowedRoles={['learner']}>
+                  <RewardsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/store"
+              element={
+                <ProtectedRoute allowedRoles={['learner']}>
+                  <RewardStorePage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/certificates"
+              element={
+                <ProtectedRoute allowedRoles={['learner']}>
+                  <CertificatesPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Mentor Routes */}
             <Route
@@ -229,6 +257,14 @@ export default function App() {
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminAnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/rewards"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminRewardsPage />
                 </ProtectedRoute>
               }
             />

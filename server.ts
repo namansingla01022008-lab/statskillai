@@ -25,6 +25,10 @@ import opportunitiesRouter from './server/routes/opportunities';
 import mentorshipRouter from './server/routes/mentorship';
 import analyticsRouter from './server/routes/analytics';
 import quizzesRouter from './server/routes/quizzes';
+import rewardsRouter from './server/routes/rewards';
+import certificatesRouter from './server/routes/certificates';
+import adminRewardsRouter from './server/routes/adminRewards';
+import { processOutbox } from './server/services/rewardEngine';
 
 dotenv.config();
 
@@ -93,6 +97,14 @@ async function startServer() {
   app.use('/api/mentorship', mentorshipRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/quizzes', quizzesRouter);
+  app.use('/api/rewards', rewardsRouter);
+  app.use('/api/certificates', certificatesRouter);
+  app.use('/api/admin', adminRewardsRouter);
+
+  // Background Outbox Recovery Worker: retries failed XP events every 60 seconds
+  setInterval(() => {
+    processOutbox().catch((e) => console.error('Outbox worker error:', e));
+  }, 60 * 1000);
 
   // Server-side Gemini generateContent
   app.post('/api/gemini/generate', async (req, res) => {
