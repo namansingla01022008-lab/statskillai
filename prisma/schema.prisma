@@ -206,9 +206,68 @@ model Mentor {
   availability    String       @default("Flexible")
   rating          Float        @default(5.0)
   totalReviews    Int          @default(0)
+  price           Int          @default(10)
+  totalSessions   Int          @default(0)
+  expertise       String       @default("[]") // JSON string[]
+  avatarUrl       String?
+  availableSlots  String       @default("[]") // JSON MentorAvailabilitySlot[]
   mentorships     Mentorship[]
+  sessionBookings MentorshipSessionBooking[]
 
   @@index([userId])
+}
+
+model MentorshipSessionBooking {
+  id              String   @id @default(uuid())
+  sessionId       String   @unique
+  meetingId       String
+  studentId       String
+  studentName     String
+  mentorId        String
+  mentor          Mentor   @relation(fields: [mentorId], references: [id], onDelete: Cascade)
+  mentorName      String
+  mentorTitle     String?
+  skillDomain     String   // Technical, Statistical, Digital, Behavioural
+  topic           String
+  date            String
+  timeSlot        String
+  durationMinutes Int      @default(45)
+  price           Int      @default(10)
+  paymentStatus   String   @default("Successful") // Pending, Successful, Failed, Refunded
+  sessionStatus   String   @default("Upcoming")   // Upcoming, Live, Completed, Cancelled
+  createdAt       DateTime @default(now())
+  completedAt     DateTime?
+  feedback        MentorshipSessionFeedback?
+
+  @@index([studentId])
+  @@index([mentorId])
+  @@index([sessionStatus])
+}
+
+model MentorshipSessionFeedback {
+  id                  String   @id @default(uuid())
+  bookingId           String   @unique
+  booking             MentorshipSessionBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sessionId           String   @unique
+  mentorId            String
+  studentId           String
+  studentUnderstanding String
+  strengths           String   @default("[]") // JSON string[]
+  weaknesses          String   @default("[]") // JSON string[]
+  recommendedTopics   String   @default("[]") // JSON string[]
+  nextTasks           String   @default("[]") // JSON string[]
+  personalMessage     String   @default("")
+  rating              Int?
+  review              String?
+  isHelpful           Boolean?
+  skillBoostPoints    Int      @default(5)
+  skillBoostDomain    String   @default("Technical")
+  previousScore       Int      @default(62)
+  updatedScore        Int      @default(67)
+  createdAt           DateTime @default(now())
+
+  @@index([studentId])
+  @@index([mentorId])
 }
 
 model Mentorship {

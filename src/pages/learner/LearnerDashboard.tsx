@@ -173,6 +173,114 @@ export const LearnerDashboard: React.FC = () => {
         })}
       </div>
 
+      {/* AI + HUMAN MENTORSHIP CONNECTION BANNER */}
+      {(() => {
+        const sessionBookings = StorageService.getLearnerSessionBookings(currentUser.id);
+        const upcomingSession = sessionBookings.find(
+          (b) => b.sessionStatus === 'Upcoming' || b.sessionStatus === 'Live'
+        );
+
+        // Detect weak skill from gap analysis or low domain
+        const primaryGap = gapAnalysis?.gaps && gapAnalysis.gaps.length > 0 ? gapAnalysis.gaps[0] : null;
+        const weakTopicName = primaryGap
+          ? primaryGap.skill
+          : domainScores.Technical < 70
+          ? 'Binary Trees & Graphs'
+          : domainScores.Statistical < 70
+          ? 'Survey Sampling & Variance Estimation'
+          : 'Data Structures & Algorithms';
+        const weakDomain = primaryGap?.domain || 'Technical';
+
+        return (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* AI-Driven Weak Area Mentorship Recommendation */}
+            <div className={`${upcomingSession ? 'lg:col-span-7' : 'lg:col-span-12'} bg-gradient-to-r from-teal-900 via-slate-900 to-indigo-950 text-white rounded-xl p-5 sm:p-6 border border-teal-500/30 shadow-md relative overflow-hidden flex flex-col justify-between`}>
+              <div className="absolute top-0 right-0 transform translate-x-8 -translate-y-8 w-44 h-44 bg-teal-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="relative z-10 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-teal-400/20 text-teal-300 border border-teal-400/30">
+                    <Sparkles className="w-3 h-3 text-teal-300 animate-pulse" />
+                    AI Diagnostics + Human Mentorship
+                  </span>
+                  <span className="text-xs text-slate-400">Personalized Live Intervention</span>
+                </div>
+
+                <h2 className="text-lg sm:text-xl font-black text-white tracking-tight">
+                  Need help with {weakTopicName}?
+                </h2>
+
+                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-2xl">
+                  Your diagnostic assessment indicates that <strong className="text-teal-300">{weakTopicName}</strong> in{' '}
+                  <span className="font-semibold text-white">{weakDomain}</span> needs improvement. Connect 1-on-1 with a verified practitioner for a live code review and personalized problem-solving.
+                </p>
+
+                <div className="pt-2 italic text-[11px] text-teal-200/80">
+                  “AI tells you what to improve. Human mentors show you how to improve. StatSkillAI tracks your growth.”
+                </div>
+              </div>
+
+              <div className="relative z-10 pt-4 mt-2 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                  <span>Verified Mentors available from ₹5 / 5 minutes (₹5, ₹8, ₹10, ₹15)</span>
+                </div>
+                <a
+                  href={`#/mentors?skill=${encodeURIComponent(weakTopicName)}`}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs transition-transform hover:scale-[1.02] shadow-sm"
+                >
+                  <Users className="w-4 h-4 text-slate-950" />
+                  <span>Find a {weakTopicName.split(' ')[0]} Mentor</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-slate-950" />
+                </a>
+              </div>
+            </div>
+
+            {/* Upcoming Live Session Card if student has one */}
+            {upcomingSession && (
+              <div className="lg:col-span-5 bg-white rounded-xl p-5 border-2 border-rose-500/40 shadow-md flex flex-col justify-between space-y-3">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-rose-100 text-rose-800 border border-rose-300">
+                      <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping inline-block" />
+                      🔴 LIVE Mentorship Ready
+                    </span>
+                    <span className="text-[11px] font-mono font-bold text-slate-500">
+                      ID: {upcomingSession.meetingId}
+                    </span>
+                  </div>
+
+                  <h3 className="font-black text-sm text-slate-900 leading-tight">
+                    {upcomingSession.topic}
+                  </h3>
+
+                  <p className="text-xs text-slate-600">
+                    With <strong>{upcomingSession.mentorName}</strong> ({upcomingSession.mentorTitle || 'Mentor'})
+                  </p>
+
+                  <div className="text-[11px] text-slate-500 flex items-center gap-3 pt-1">
+                    <span>📅 {upcomingSession.date}</span>
+                    <span>⏰ {upcomingSession.timeSlot}</span>
+                    <span>⏱ 5 Mins Live (₹{upcomingSession.price} / 5 mins)</span>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100">
+                  <a
+                    href={`#/mentorship/session/${upcomingSession.sessionId}`}
+                    className="w-full inline-flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-md transition-all hover:shadow-lg"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+                    <span>Join Live Mentorship Session</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Main Grid: Radar Chart + Skill Gap Alerts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Radar Chart Column (7 cols) */}
