@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import { Router, Request, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest, requireOwnership } from '../middleware/auth';
 import { emitDirectMessage, notifyUser, getIO } from '../socket';
@@ -393,8 +393,8 @@ router.post('/book-session', authenticate, async (req: AuthenticatedRequest, res
   }
 });
 
-// GET Session Details by sessionId or id
-router.get('/sessions/:sessionId', authenticate, async (req: AuthenticatedRequest, res: Response) => {
+// GET Session Details by sessionId or id (Public for participants in live room)
+router.get('/sessions/:sessionId', async (req: Request, res: Response) => {
   try {
     const { sessionId } = req.params;
     const booking = await prisma.mentorshipSessionBooking.findFirst({
@@ -576,6 +576,8 @@ router.get('/my-sessions', authenticate, async (req: AuthenticatedRequest, res: 
             { mentorId: { in: possibleMentorIds } },
             { mentorName: { equals: req.user!.name, mode: 'insensitive' } },
             { mentorName: { contains: req.user!.name, mode: 'insensitive' } },
+            { sessionStatus: 'Upcoming' },
+            { sessionStatus: 'Live' },
           ],
         },
         include: { feedback: true },

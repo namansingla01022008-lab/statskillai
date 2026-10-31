@@ -23,6 +23,7 @@ import {
   Terminal,
   Radio,
   Wifi,
+  Check,
 } from 'lucide-react';
 
 interface ChatEntry {
@@ -42,7 +43,7 @@ const ICE_SERVERS: RTCConfiguration = {
 };
 
 export const LiveMentorshipSessionPage: React.FC = () => {
-  const { sessionId } = useParams<{ sessionId: string }>();
+  const { sessionId: routeSessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const { currentUser, refreshScores } = useApp();
 
@@ -72,8 +73,13 @@ export const LiveMentorshipSessionPage: React.FC = () => {
 
   // WebRTC Peer Connection & Remote Status
   const pcRef = useRef<RTCPeerConnection | null>(null);
+  const iceCandidatesQueue = useRef<RTCIceCandidateInit[]>([]);
   const [isRemoteConnected, setIsRemoteConnected] = useState<boolean>(false);
+  const [isPeerInRoom, setIsPeerInRoom] = useState<boolean>(false);
   const [remotePeerSocketId, setRemotePeerSocketId] = useState<string | null>(null);
+  const [remotePeerName, setRemotePeerName] = useState<string>('');
+  const [socketConnected, setSocketConnected] = useState<boolean>(false);
+
   const [codeSnippet, setCodeSnippet] = useState<string>(
 `// 1-on-1 Mentorship Live Walkthrough
 void inorderTraversal(TreeNode* root) {
@@ -101,7 +107,7 @@ void inorderTraversal(TreeNode* root) {
   const myName = currentUser.name;
   const myRoleLabel = isMentor ? 'Mentor' : 'Student';
 
-  const remoteName = session ? (isMentor ? session.studentName : session.mentorName) : 'Participant';
+  const remoteName = remotePeerName || (session ? (isMentor ? session.studentName : session.mentorName) : 'Participant');
   const remoteRoleLabel = isMentor ? 'Student / Mentee' : 'Mentor Specialist';
   const remoteTitle = session
     ? (isMentor ? 'Diagnostic Mentee' : (session.mentorTitle || 'Verified Mentor Specialist'))
@@ -109,27 +115,27 @@ void inorderTraversal(TreeNode* root) {
 
   // 1. Load Session Details
   useEffect(() => {
-    if (!sessionId) return;
+    if (!routeSessionId) return;
 
     async function loadSession() {
       setLoading(true);
-      let found = await ApiService.getSessionBooking(sessionId!);
+      let found = await ApiService.getSessionBooking(routeSessionId!);
       if (!found) {
-        found = StorageService.getSessionBooking(sessionId!);
+        found = StorageService.getSessionBooking(routeSessionId!);
       }
 
       if (!found) {
         // Fallback demo session
         found = {
           id: `booking-${Date.now()}`,
-          sessionId: sessionId!,
+          sessionId: routeSessionId!,
           meetingId: `LIVE-STAT-7209`,
           studentId: currentUser.id,
-          studentName: currentUser.role === 'mentor' ? 'Aarav Sharma' : currentUser.name,
+          studentName: currentUser.role === 'mentor' ? 'Learner Student' : currentUser.name,
           mentorId: 'mentor-1',
           mentorName: currentUser.role === 'mentor' ? currentUser.name : 'Dr. Anita Rao',
           mentorTitle: 'Senior Principal Statistician & NEP Educational Advisor',
-          skillDomain: 'Statistical',
+          skillDomain: 'Digital',
           topic: 'DSA – Binary Trees & Recursive Traversals',
           date: new Date().toISOString().split('T')[0],
           timeSlot: '10:00 AM',
@@ -163,7 +169,7 @@ void inorderTraversal(TreeNode* root) {
     }
 
     loadSession();
-  }, [sessionId, currentUser]);
+  }, [routeSessionId, currentUser]);
 
   // 2. Initialize Local Camera & Microphone
   useEffect(() => {
@@ -185,10 +191,15 @@ void inorderTraversal(TreeNode* root) {
         }
         setWebcamActive(true);
 
-        // If peer connection exists, add local tracks
+        // Attach tracks to existing peer connection if active
         if (pcRef.current) {
           stream.getTracks().forEach((track) => {
-            pcRef.current?.addTrack(track, stream!);
+            const sender = pcRef.current?.getSenders().find((s) => s.track?.kind === track.kind);
+            if (sender) {
+              sender.replaceTrack(track);
+            } else {
+              pcRef.current?.addTrack(track, stream!);
+            }
           });
         }
       } catch (err) {
@@ -223,8 +234,8 @@ void inorderTraversal(TreeNode* root) {
     }
   }, [isCameraOn]);
 
-  // 4. WebRTC Connection Helper
-  const initPeerConnection = useCallback((targetSocketId: string) => {
+  // 4. WebRTC Peer Connection Factory
+  const createPeerConnection = useCallback((targetSocketId: string) => {
     if (pcRef.current) {
       try {
         pcRef.current.close();
@@ -233,15 +244,19 @@ void inorderTraversal(TreeNode* root) {
 
     const pc = new RTCPeerConnection(ICE_SERVERS);
     pcRef.current = pc;
+    iceCandidatesQueue.current = [];
 
-    // Attach local tracks
-    if (localStreamRef.current) {
+    // Attach local media tracks if ready, otherwise add transceivers
+    if (localStreamRef.current && localStreamRef.current.getTracks().length > 0) {
       localStreamRef.current.getTracks().forEach((track) => {
         pc.addTrack(track, localStreamRef.current!);
       });
+    } else {
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+      pc.addTransceiver('audio', { direction: 'sendrecv' });
     }
 
-    // Handle remote tracks
+    // When remote track arrives from peer
     pc.ontrack = (event) => {
       console.log('[WebRTC] Remote track received:', event.streams);
       if (remoteVideoRef.current && event.streams[0]) {
@@ -249,9 +264,10 @@ void inorderTraversal(TreeNode* root) {
         remoteVideoRef.current.play().catch(() => {});
       }
       setIsRemoteConnected(true);
+      setIsPeerInRoom(true);
     };
 
-    // Handle ICE candidates
+    // When local ICE candidate is gathered, send to peer
     pc.onicecandidate = (event) => {
       if (event.candidate && session) {
         const socket = ApiService.getSocket();
@@ -259,6 +275,7 @@ void inorderTraversal(TreeNode* root) {
           targetSocketId,
           signal: { type: 'candidate', candidate: event.candidate },
           sessionId: session.sessionId,
+          meetingId: session.meetingId,
         });
       }
     };
@@ -267,6 +284,7 @@ void inorderTraversal(TreeNode* root) {
       console.log('[WebRTC] Connection state changed:', pc.connectionState);
       if (pc.connectionState === 'connected') {
         setIsRemoteConnected(true);
+        setIsPeerInRoom(true);
       } else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
         setIsRemoteConnected(false);
       }
@@ -275,27 +293,85 @@ void inorderTraversal(TreeNode* root) {
     return pc;
   }, [session]);
 
-  // 5. Socket.io Signaling Lifecycle
+  // Helper to drain queued ICE candidates after remote description is set
+  const drainIceCandidates = async (pc: RTCPeerConnection) => {
+    while (iceCandidatesQueue.current.length > 0) {
+      const cand = iceCandidatesQueue.current.shift();
+      if (cand) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(cand));
+        } catch (err) {
+          console.warn('[WebRTC] Candidate error during drain:', err);
+        }
+      }
+    }
+  };
+
+  // 5. Socket.io Signaling & Real-Time Presence Lifecycle
   useEffect(() => {
     if (!session) return;
 
     const socket = ApiService.getSocket();
+    setSocketConnected(socket.connected);
 
-    // Join room
-    socket.emit('join_live_session', {
-      sessionId: session.sessionId,
-      name: myName,
-      role: isMentor ? 'mentor' : 'learner',
-    });
+    // Join all session alias keys
+    const emitJoin = () => {
+      socket.emit('join_live_session', {
+        sessionId: session.sessionId,
+        meetingId: session.meetingId,
+        bookingId: session.id,
+        name: myName,
+        role: isMentor ? 'mentor' : 'learner',
+      });
+      setSocketConnected(true);
+    };
+
+    emitJoin();
+
+    // Re-join automatically if socket reconnects
+    const handleConnect = () => {
+      console.log('[Live Session] Socket connected/reconnected. Re-joining room...');
+      emitJoin();
+    };
+
+    const handleDisconnect = () => {
+      setSocketConnected(false);
+    };
+
+    // Presence Ping/Pong Heartbeat every 3 seconds
+    const pingInterval = setInterval(() => {
+      if (socket.connected) {
+        socket.emit('live_session_ping', {
+          sessionId: session.sessionId,
+          meetingId: session.meetingId,
+          name: myName,
+          role: myRoleLabel,
+        });
+      }
+    }, 3000);
+
+    const handlePong = (data: any) => {
+      setIsPeerInRoom(true);
+      if (data?.socketId) {
+        setRemotePeerSocketId(data.socketId);
+      }
+      if (data?.name) {
+        setRemotePeerName(data.name);
+      }
+    };
 
     // 1. Existing peers already in the room -> Initiate offer
     const handleExistingPeers = async ({ peers }: { peers: any[] }) => {
       if (peers && peers.length > 0) {
         const target = peers[0];
         setRemotePeerSocketId(target.socketId);
-        console.log('[Live Session] Connecting to existing peer:', target);
+        if (target.name) {
+          setRemotePeerName(target.name);
+        }
+        setIsPeerInRoom(true);
+        console.log('[Live Session] Found existing peer in room:', target);
 
-        const pc = initPeerConnection(target.socketId);
+        const pc = createPeerConnection(target.socketId);
         try {
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
@@ -304,17 +380,22 @@ void inorderTraversal(TreeNode* root) {
             targetSocketId: target.socketId,
             signal: { type: 'offer', sdp: offer },
             sessionId: session.sessionId,
+            meetingId: session.meetingId,
           });
         } catch (err) {
-          console.error('[WebRTC] Create offer failed:', err);
+          console.error('[WebRTC] Failed to create offer for existing peer:', err);
         }
       }
     };
 
     // 2. A new peer joined the room
     const handlePeerJoined = (peer: any) => {
-      console.log('[Live Session] Peer joined:', peer);
+      console.log('[Live Session] New peer joined room:', peer);
       setRemotePeerSocketId(peer.socketId);
+      if (peer.name) {
+        setRemotePeerName(peer.name);
+      }
+      setIsPeerInRoom(true);
 
       setChatLog((prev) => [
         ...prev,
@@ -322,22 +403,31 @@ void inorderTraversal(TreeNode* root) {
           id: `sys-${Date.now()}`,
           sender: 'system',
           senderName: 'System Notice',
-          text: `🟢 ${peer.name} has joined the live room! Establishing direct video link...`,
+          text: `🟢 ${peer.name || 'Peer'} has entered the room! Establishing direct connection...`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
+
+      // Ensure peer connection is initialized to receive offer from the newcomer
+      createPeerConnection(peer.socketId);
     };
 
-    // 3. WebRTC Signals (Offer, Answer, Candidate)
+    // 3. WebRTC Signals Relay
     const handleSignal = async ({ fromSocketId, fromName, signal }: { fromSocketId: string; fromName: string; signal: any }) => {
       setRemotePeerSocketId(fromSocketId);
+      if (fromName) {
+        setRemotePeerName(fromName);
+      }
+      setIsPeerInRoom(true);
 
       if (signal.type === 'offer') {
-        console.log('[WebRTC] Received offer from:', fromName);
-        const pc = initPeerConnection(fromSocketId);
+        console.log('[WebRTC] Handling offer from:', fromName);
+        const pc = createPeerConnection(fromSocketId);
 
         try {
           await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+          await drainIceCandidates(pc);
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
 
@@ -345,59 +435,67 @@ void inorderTraversal(TreeNode* root) {
             targetSocketId: fromSocketId,
             signal: { type: 'answer', sdp: answer },
             sessionId: session.sessionId,
+            meetingId: session.meetingId,
           });
         } catch (err) {
-          console.error('[WebRTC] Failed to handle offer and create answer:', err);
+          console.error('[WebRTC] Error handling offer:', err);
         }
       } else if (signal.type === 'answer') {
-        console.log('[WebRTC] Received answer');
+        console.log('[WebRTC] Handling answer from:', fromName);
         if (pcRef.current) {
           try {
             await pcRef.current.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+            await drainIceCandidates(pcRef.current);
           } catch (err) {
-            console.error('[WebRTC] Failed to set remote answer:', err);
+            console.error('[WebRTC] Error setting remote answer:', err);
           }
         }
       } else if (signal.type === 'candidate') {
-        if (pcRef.current && signal.candidate) {
+        if (pcRef.current && pcRef.current.remoteDescription) {
           try {
             await pcRef.current.addIceCandidate(new RTCIceCandidate(signal.candidate));
           } catch (err) {
-            console.error('[WebRTC] Failed to add ICE candidate:', err);
+            console.warn('[WebRTC] Error adding ICE candidate:', err);
           }
+        } else {
+          iceCandidatesQueue.current.push(signal.candidate);
         }
       }
     };
 
-    // 4. Real-time chat messages from peer
+    // 4. Live Chat
     const handleIncomingChat = (message: ChatEntry) => {
       setChatLog((prev) => {
-        // Prevent duplicate messages if sender already added locally
         if (prev.some((m) => m.id === message.id)) return prev;
         return [...prev, message];
       });
+      setIsPeerInRoom(true);
     };
 
-    // 5. Code sync
+    // 5. Code Sync
     const handleIncomingCode = ({ code }: { code: string }) => {
       setCodeSnippet(code);
     };
 
-    // 6. Peer left
+    // 6. Peer Left
     const handlePeerLeft = () => {
       setIsRemoteConnected(false);
+      setIsPeerInRoom(false);
       setChatLog((prev) => [
         ...prev,
         {
           id: `sys-left-${Date.now()}`,
           sender: 'system',
           senderName: 'System Notice',
-          text: `⚠️ The other participant has left the room.`,
+          text: `⚠️ ${remoteName} has disconnected from the room.`,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ]);
     };
 
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+    socket.on('live_session_pong', handlePong);
     socket.on('existing_session_peers', handleExistingPeers);
     socket.on('peer_joined_session', handlePeerJoined);
     socket.on('live_session_signal', handleSignal);
@@ -406,7 +504,15 @@ void inorderTraversal(TreeNode* root) {
     socket.on('peer_left_session', handlePeerLeft);
 
     return () => {
-      socket.emit('leave_live_session', { sessionId: session.sessionId });
+      clearInterval(pingInterval);
+      socket.emit('leave_live_session', {
+        sessionId: session.sessionId,
+        meetingId: session.meetingId,
+      });
+
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+      socket.off('live_session_pong', handlePong);
       socket.off('existing_session_peers', handleExistingPeers);
       socket.off('peer_joined_session', handlePeerJoined);
       socket.off('live_session_signal', handleSignal);
@@ -419,7 +525,7 @@ void inorderTraversal(TreeNode* root) {
         pcRef.current = null;
       }
     };
-  }, [session, myName, isMentor, initPeerConnection]);
+  }, [session, myName, myRoleLabel, remoteName, isMentor, createPeerConnection]);
 
   // 6. Countdown Timer
   useEffect(() => {
@@ -443,7 +549,7 @@ void inorderTraversal(TreeNode* root) {
     setChatInput('');
 
     const newMsg: ChatEntry = {
-      id: `chat-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+      id: `chat-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
       sender: isMentor ? 'mentor' : 'student',
       senderName: myName,
       text,
@@ -453,10 +559,12 @@ void inorderTraversal(TreeNode* root) {
     // Add locally immediately
     setChatLog((prev) => [...prev, newMsg]);
 
-    // Broadcast through socket to other peer in the room
+    // Broadcast through socket to other peer across all alias keys
     const socket = ApiService.getSocket();
     socket.emit('live_session_chat', {
       sessionId: session.sessionId,
+      meetingId: session.meetingId,
+      bookingId: session.id,
       message: newMsg,
     });
   };
@@ -552,7 +660,7 @@ void inorderTraversal(TreeNode* root) {
           </div>
         </div>
 
-        {/* Center Countdown Timer */}
+        {/* Center Countdown Timer & Meeting ID */}
         <div className="flex items-center gap-4">
           <div className="bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 flex items-center gap-2 text-xs">
             <span className="text-[10px] font-bold text-teal-300 bg-teal-950/80 px-2 py-0.5 rounded border border-teal-500/30">
@@ -581,16 +689,20 @@ void inorderTraversal(TreeNode* root) {
               {/* Top status bar in remote video */}
               <div className="p-3 bg-gradient-to-b from-slate-950/80 to-transparent flex items-center justify-between z-10">
                 <span className="text-xs font-bold text-white bg-slate-950/60 backdrop-blur-xs px-2.5 py-1 rounded-md border border-white/10 flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${isRemoteConnected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span className={`w-2 h-2 rounded-full ${
+                    isRemoteConnected ? 'bg-emerald-400 animate-pulse' : isPeerInRoom ? 'bg-amber-400 animate-pulse' : 'bg-slate-500'
+                  }`} />
                   {remoteName} ({remoteRoleLabel})
                 </span>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded flex items-center gap-1 ${
                   isRemoteConnected
                     ? 'text-teal-300 bg-teal-950/80 border border-teal-500/30'
-                    : 'text-amber-300 bg-amber-950/80 border border-amber-500/30'
+                    : isPeerInRoom
+                    ? 'text-amber-300 bg-amber-950/80 border border-amber-500/30'
+                    : 'text-slate-400 bg-slate-950/80 border border-slate-700'
                 }`}>
                   <Radio className="w-3 h-3" />
-                  {isRemoteConnected ? 'Live • Connected' : 'Waiting to Connect...'}
+                  {isRemoteConnected ? '1080p HD Live' : isPeerInRoom ? 'In Room • Connecting' : 'Waiting for Peer...'}
                 </span>
               </div>
 
@@ -618,7 +730,7 @@ void inorderTraversal(TreeNode* root) {
                     className={`w-full h-full object-cover rounded-xl ${isRemoteConnected ? 'block' : 'hidden'}`}
                   />
 
-                  {/* Placeholder when remote peer is not yet streaming video */}
+                  {/* Placeholder when remote peer video is establishing or waiting */}
                   {!isRemoteConnected && (
                     <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 relative z-0">
                       <div className="w-24 h-24 rounded-full bg-teal-500/20 flex items-center justify-center ring-4 ring-teal-500/40 animate-pulse">
@@ -632,9 +744,13 @@ void inorderTraversal(TreeNode* root) {
                         <p className="text-xs text-slate-400">{remoteTitle}</p>
                       </div>
 
-                      <div className="text-[11px] text-amber-300 bg-amber-950/60 px-3 py-1 rounded-full border border-amber-500/30 flex items-center gap-1.5">
-                        <Wifi className="w-3.5 h-3.5 animate-pulse" />
-                        <span>Signaling active • Waiting for {remoteName} to enter</span>
+                      <div className="text-[11px] text-amber-300 bg-amber-950/60 px-3.5 py-1.5 rounded-full border border-amber-500/30 flex items-center gap-1.5">
+                        <Wifi className="w-3.5 h-3.5 animate-pulse text-amber-400" />
+                        <span>
+                          {isPeerInRoom
+                            ? `🟢 ${remoteName} is in room • Establishing video link...`
+                            : `Signaling active • Waiting for ${remoteName} to enter`}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -825,8 +941,9 @@ void inorderTraversal(TreeNode* root) {
                             {msg.senderName}
                           </p>
                           <p className="text-xs">{msg.text}</p>
-                          <span className="text-[9px] opacity-60 block text-right mt-1">
-                            {msg.timestamp}
+                          <span className="text-[9px] opacity-60 flex items-center justify-end gap-1 mt-1">
+                            <span>{msg.timestamp}</span>
+                            {isMe && <Check className="w-3 h-3 text-teal-300" />}
                           </span>
                         </div>
                       )}
@@ -870,6 +987,11 @@ void inorderTraversal(TreeNode* root) {
                 <p><strong>Domain: </strong>{session.skillDomain}</p>
                 <p><strong>Scheduled: </strong>{session.date} at {session.timeSlot}</p>
                 <p><strong>Meeting ID: </strong><span className="font-mono text-teal-300">{session.meetingId}</span></p>
+                <p><strong>Room Status: </strong>
+                  <span className={isPeerInRoom ? 'text-emerald-400 font-bold' : 'text-amber-400 font-bold'}>
+                    {isPeerInRoom ? 'Both Participants Connected' : 'Waiting for Peer'}
+                  </span>
+                </p>
               </div>
 
               <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">

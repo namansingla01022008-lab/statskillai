@@ -49,72 +49,112 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
     // -------------------------------------------------------------------
     // LIVE MENTORSHIP VIDEO CALL & WEBRTC SIGNALING
     // -------------------------------------------------------------------
-    socket.on('join_live_session', ({ sessionId, name, role }: { sessionId: string; name?: string; role?: string }) => {
-      const room = `room:live_session:${sessionId}`;
-      socket.join(room);
+    socket.on('join_live_session', ({ sessionId, meetingId, bookingId, name, role }: { sessionId: string; meetingId?: string; bookingId?: string; name?: string; role?: string }) => {
+      // Remember participant info on socket
+      (socket as any).participantName = user?.name || name || 'Participant';
+      (socket as any).participantRole = user?.role || role || 'learner';
 
       const participantInfo = {
         socketId: socket.id,
         userId: user?.userId || socket.id,
-        name: user?.name || name || 'Participant',
-        role: user?.role || role || 'learner',
+        name: (socket as any).participantName,
+        role: (socket as any).participantRole,
       };
 
-      // Collect existing peers in this room
+      // Join all alias keys for this session (sessionId, meetingId, bookingId) to prevent room divergence
+      const roomKeys = [sessionId, meetingId, bookingId].filter(Boolean) as string[];
+      for (const key of roomKeys) {
+        socket.join(`room:live_session:${key}`);
+      }
+
+      // Collect existing peers across all alias rooms
       const existingInRoom: any[] = [];
-      const socketsInRoom = io?.sockets.adapter.rooms.get(room);
-      if (socketsInRoom) {
-        for (const sId of socketsInRoom) {
-          if (sId !== socket.id) {
-            const otherSocket = io?.sockets.sockets.get(sId);
-            const otherUser = (otherSocket as any)?.user;
-            existingInRoom.push({
-              socketId: sId,
-              userId: otherUser?.userId || sId,
-              name: otherUser?.name || 'Peer Participant',
-              role: otherUser?.role || 'mentor',
-            });
+      const seenSocketIds = new Set<string>();
+
+      for (const key of roomKeys) {
+        const room = `room:live_session:${key}`;
+        const socketsInRoom = io?.sockets.adapter.rooms.get(room);
+        if (socketsInRoom) {
+          for (const sId of socketsInRoom) {
+            if (sId !== socket.id && !seenSocketIds.has(sId)) {
+              seenSocketIds.add(sId);
+              const otherSocket = io?.sockets.sockets.get(sId);
+              const otherUser = (otherSocket as any)?.user;
+              existingInRoom.push({
+                socketId: sId,
+                userId: otherUser?.userId || sId,
+                name: (otherSocket as any)?.participantName || otherUser?.name || 'Peer Participant',
+                role: (otherSocket as any)?.participantRole || otherUser?.role || 'mentor',
+              });
+            }
           }
         }
       }
 
-      console.log(`[Live Session] Socket ${socket.id} (${participantInfo.name}) joined ${room}. Peers count: ${existingInRoom.length}`);
+      console.log(`[Live Session] Socket ${socket.id} (${participantInfo.name}) joined rooms [${roomKeys.join(', ')}]. Peers count: ${existingInRoom.length}`);
 
       // Send existing peers to newly joined participant
       socket.emit('existing_session_peers', { peers: existingInRoom });
 
-      // Notify other peers in room that someone joined
-      socket.to(room).emit('peer_joined_session', participantInfo);
+      // Notify other peers across all alias rooms that someone joined
+      for (const key of roomKeys) {
+        socket.to(`room:live_session:${key}`).emit('peer_joined_session', participantInfo);
+      }
+    });
+
+    // Presence Heartbeat Ping & Pong
+    socket.on('live_session_ping', ({ sessionId, meetingId, name, role }: any) => {
+      const roomKeys = [sessionId, meetingId].filter(Boolean) as string[];
+      const pongData = {
+        socketId: socket.id,
+        name: name || (socket as any).participantName || 'Peer',
+        role: role || (socket as any).participantRole || 'participant',
+        timestamp: Date.now(),
+      };
+      for (const key of roomKeys) {
+        socket.to(`room:live_session:${key}`).emit('live_session_pong', pongData);
+      }
     });
 
     // WebRTC Offer/Answer/ICE Candidate Signaling relay
-    socket.on('live_session_signal', ({ targetSocketId, signal, sessionId }: { targetSocketId?: string; signal: any; sessionId: string }) => {
-      const room = `room:live_session:${sessionId}`;
+    socket.on('live_session_signal', ({ targetSocketId, signal, sessionId, meetingId }: { targetSocketId?: string; signal: any; sessionId: string; meetingId?: string }) => {
       if (targetSocketId) {
         io?.to(targetSocketId).emit('live_session_signal', {
           fromSocketId: socket.id,
-          fromName: user?.name || 'Peer',
+          fromName: (socket as any)?.participantName || user?.name || 'Peer',
           signal,
         });
       } else {
-        socket.to(room).emit('live_session_signal', {
-          fromSocketId: socket.id,
-          fromName: user?.name || 'Peer',
-          signal,
-        });
+        const roomKeys = [sessionId, meetingId].filter(Boolean) as string[];
+        for (const key of roomKeys) {
+          socket.to(`room:live_session:${key}`).emit('live_session_signal', {
+            fromSocketId: socket.id,
+            fromName: (socket as any)?.participantName || user?.name || 'Peer',
+            signal,
+          });
+        }
       }
     });
 
     // Live session chat message broadcast
-    socket.on('live_session_chat', ({ sessionId, message }: { sessionId: string; message: any }) => {
-      const room = `room:live_session:${sessionId}`;
-      io?.to(room).emit('live_session_chat', message);
+    socket.on('live_session_chat', ({ sessionId, meetingId, bookingId, message }: { sessionId: string; meetingId?: string; bookingId?: string; message: any }) => {
+      const roomKeys = [sessionId, meetingId, bookingId].filter(Boolean) as string[];
+      const broadcasted = new Set<string>();
+      for (const key of roomKeys) {
+        const room = `room:live_session:${key}`;
+        if (!broadcasted.has(room)) {
+          broadcasted.add(room);
+          io?.to(room).emit('live_session_chat', message);
+        }
+      }
     });
 
     // Live session interactive code share
-    socket.on('live_session_code', ({ sessionId, code, senderName }: { sessionId: string; code: string; senderName: string }) => {
-      const room = `room:live_session:${sessionId}`;
-      socket.to(room).emit('live_session_code', { code, senderName });
+    socket.on('live_session_code', ({ sessionId, meetingId, code, senderName }: { sessionId: string; meetingId?: string; code: string; senderName: string }) => {
+      const roomKeys = [sessionId, meetingId].filter(Boolean) as string[];
+      for (const key of roomKeys) {
+        socket.to(`room:live_session:${key}`).emit('live_session_code', { code, senderName });
+      }
     });
 
     // Live session booking real-time relay
@@ -123,11 +163,14 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
     });
 
     // Leave live session
-    socket.on('leave_live_session', ({ sessionId }: { sessionId: string }) => {
-      const room = `room:live_session:${sessionId}`;
-      socket.leave(room);
-      socket.to(room).emit('peer_left_session', { socketId: socket.id, userId: user?.userId });
-      console.log(`[Live Session] Socket ${socket.id} left ${room}`);
+    socket.on('leave_live_session', ({ sessionId, meetingId }: { sessionId: string; meetingId?: string }) => {
+      const roomKeys = [sessionId, meetingId].filter(Boolean) as string[];
+      for (const key of roomKeys) {
+        const room = `room:live_session:${key}`;
+        socket.leave(room);
+        socket.to(room).emit('peer_left_session', { socketId: socket.id, userId: user?.userId });
+      }
+      console.log(`[Live Session] Socket ${socket.id} left rooms [${roomKeys.join(', ')}]`);
     });
 
     // Handle typing indicators

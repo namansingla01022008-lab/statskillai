@@ -256,7 +256,12 @@ router.post('/demo-switch', async (req: Request, res: Response) => {
 
     let user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
-      const seedUser = SEED_USERS.find((u) => u.id === userId || u.email === userId);
+      let seedUser = SEED_USERS.find((u) => u.id === userId || u.email === userId);
+      if (!seedUser) {
+        if (userId === 'mentor-1') seedUser = SEED_USERS.find((u) => u.id === 'user-mentor-1');
+        if (userId === 'mentor-2') seedUser = SEED_USERS.find((u) => u.id === 'user-mentor-2');
+        if (userId === 'mentor-rahul') seedUser = SEED_USERS.find((u) => u.id === 'user-mentor-2');
+      }
       if (seedUser) {
         user = await prisma.user.findUnique({ where: { email: seedUser.email } });
         if (!user) {
