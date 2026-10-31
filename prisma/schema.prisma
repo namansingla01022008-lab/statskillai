@@ -112,7 +112,7 @@ model Course {
   description    String
   topic          String    @default("Statistical Inference")
   language       String    @default("English")
-  sourceUrl      String    @unique
+  sourceUrl      String
   sourceName     String    @default("Official Portal")
   portalUrl      String    @default("")
   licenseNote    String?
@@ -126,6 +126,7 @@ model Course {
   @@index([source])
   @@index([status])
   @@index([topic])
+  @@index([sourceUrl])
 }
 
 model Career {

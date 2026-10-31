@@ -113,7 +113,7 @@ export async function seedDatabase() {
   console.log('[Seed] Seeding Verified Official Courses...');
   for (const course of SEED_COURSES) {
     await prisma.course.upsert({
-      where: { sourceUrl: course.sourceUrl },
+      where: { id: course.id },
       update: {
         title: course.title,
         domain: course.domain,
@@ -124,6 +124,7 @@ export async function seedDatabase() {
         description: course.description,
         topic: course.topic || 'General Statistics',
         language: course.language || 'English',
+        sourceUrl: course.sourceUrl,
         sourceName: course.sourceName || 'Official Portal',
         licenseNote: course.licenseNote || null,
         status: course.status || 'unverified',
