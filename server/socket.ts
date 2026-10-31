@@ -162,6 +162,11 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       io?.emit('mentor_session_booked', data);
     });
 
+    // Real-time user registration relay
+    socket.on('user_registered', (data: any) => {
+      io?.emit('user_registered', data);
+    });
+
     // Leave live session
     socket.on('leave_live_session', ({ sessionId, meetingId }: { sessionId: string; meetingId?: string }) => {
       const roomKeys = [sessionId, meetingId].filter(Boolean) as string[];

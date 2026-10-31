@@ -56,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   // Admin nav items
   const adminNav = [
     { label: t('adminAnalytics'), path: '/admin/analytics', icon: BarChart3 },
+    { label: 'Registered Members', path: '/admin/members', icon: Users },
     { label: 'Certificates Queue', path: '/admin/certificates', icon: Award },
     { label: 'Rewards Mgmt', path: '/admin/rewards', icon: Trophy },
     { label: t('adminCatalog'), path: '/admin/catalog', icon: BookOpenCheck },

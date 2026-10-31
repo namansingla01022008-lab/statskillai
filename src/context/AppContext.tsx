@@ -52,6 +52,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isReady, setIsReady] = useState(false);
   const [isLoadingAuth, setIsLoadingAuth] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => Boolean(ApiService.getToken()));
+  const [allUsersList, setAllUsersList] = useState<User[]>(() => StorageService.getUsers());
   const [currentUser, setCurrentUser] = useState<User>(() => {
     StorageService.initStorage();
     return StorageService.getActiveUser();
@@ -305,7 +306,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerUser,
         logout,
         switchUser,
-        allUsers: StorageService.getUsers(),
+        allUsers: allUsersList,
         activeProfile,
         updateProfile,
         language: settings.language,

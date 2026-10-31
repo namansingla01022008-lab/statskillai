@@ -124,6 +124,13 @@ export const ApiService = {
       body: JSON.stringify({ email, password }),
     });
     this.setToken(data.token);
+    if (data?.user) {
+      StorageService.saveUser(data.user);
+      try {
+        const socket = this.getSocket();
+        socket.emit('user_registered', { user: data.user });
+      } catch {}
+    }
     return { user: data.user, token: data.token };
   },
 
@@ -134,6 +141,19 @@ export const ApiService = {
     });
     this.setToken(data.token);
     return { user: data.user, token: data.token };
+  },
+
+  async getAllUsers(): Promise<User[]> {
+    try {
+      const data = await this.fetchApi<{ success: boolean; users: User[] }>('/api/auth/users');
+      if (data?.users && Array.isArray(data.users)) {
+        data.users.forEach((u) => StorageService.saveUser(u));
+        return data.users;
+      }
+    } catch (err) {
+      console.warn('Backend getAllUsers failed, falling back to local storage:', err);
+    }
+    return StorageService.getUsers();
   },
 
   async demoSwitch(userId: string): Promise<{ user: User; token: string }> {

@@ -10,7 +10,6 @@ router.get('/workforce', authenticate, requireRole(['admin']), async (req: Authe
   try {
     // 1. Fetch real registered users with profiles and completed attempts
     const registeredUsers = await prisma.user.findMany({
-      where: { role: 'learner' },
       include: {
         profile: true,
         attempts: {

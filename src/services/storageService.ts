@@ -171,6 +171,19 @@ export const StorageService = {
     return this.getUsers().find((u) => u.id === id);
   },
 
+  saveUser(user: User): void {
+    const users = this.getUsers();
+    const idx = users.findIndex(
+      (u) => u.id === user.id || (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase())
+    );
+    if (idx >= 0) {
+      users[idx] = { ...users[idx], ...user };
+    } else {
+      users.unshift(user);
+    }
+    storage.save('users', users);
+  },
+
   getActiveUser(): User {
     const settings = this.getSettings();
     const users = this.getUsers();

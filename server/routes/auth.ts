@@ -3,6 +3,7 @@ import { seedDatabase } from '../../prisma/seed';
 import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db';
+import { getIO } from '../socket';
 import {
   signToken,
   signRefreshToken,
@@ -122,18 +123,27 @@ router.post('/register', async (req: Request, res: Response) => {
       maxAge: 30 * 24 * 60 * 60 * 1000,
     });
 
+    const registeredUserPayload = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      profileType: user.profileType,
+      department: user.department,
+      designation: user.designation,
+      createdAt: user.createdAt,
+    };
+
+    // Broadcast real-time user registration to admin panel and connected clients
+    const io = getIO();
+    if (io) {
+      io.emit('user_registered', { user: registeredUserPayload });
+    }
+
     res.status(201).json({
       success: true,
       token,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        profileType: user.profileType,
-        department: user.department,
-        designation: user.designation,
-      },
+      user: registeredUserPayload,
     });
   } catch (err: any) {
     console.error('Registration error:', err);
@@ -418,6 +428,31 @@ router.post('/change-password', authenticate, async (req: AuthenticatedRequest, 
   } catch (err: any) {
     console.error('Change password error:', err);
     res.status(500).json({ error: 'Failed to change password.' });
+  }
+});
+
+// GET All Registered Users / Members (Admin & Real-time Live Directory)
+router.get('/users', async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        profileType: true,
+        department: true,
+        designation: true,
+        avatar: true,
+        createdAt: true,
+      },
+    });
+
+    res.json({ success: true, users });
+  } catch (err: any) {
+    console.error('Fetch users error:', err);
+    res.status(500).json({ error: 'Failed to fetch registered users.' });
   }
 });
 

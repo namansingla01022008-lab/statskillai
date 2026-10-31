@@ -22,6 +22,7 @@ import {
 } from 'recharts';
 import {
   Users,
+  ArrowRight,
   Award,
   TrendingDown,
   Sparkles,
@@ -80,6 +81,38 @@ export const AdminAnalyticsPage: React.FC = () => {
       .finally(() => {
         setIsLoadingWorkforce(false);
       });
+  }, []);
+
+  // Real-time listener: instant workforce telemetry update when any user registers
+  useEffect(() => {
+    const socket = ApiService.getSocket();
+    const handleNewUser = (payload: any) => {
+      const newUser = payload?.user || payload;
+      if (!newUser || !newUser.id) return;
+      const newEmp: OrgEmployee = {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        department: newUser.department || 'General Administration',
+        designation: newUser.designation || 'Learner',
+        profileType: (newUser.profileType as any) || 'Student',
+        scores: { Technical: 65, Statistical: 65, Digital: 65, Behavioural: 65 },
+        participationStatus: 'Active',
+        trainingStatus: 'In progress',
+        criticalGapsCount: 2,
+        lastAssessmentDate: new Date().toISOString().split('T')[0],
+      };
+      setEmployees((prev) => {
+        const exists = prev.some((e) => e.id === newEmp.id || (e.email && newEmp.email && e.email.toLowerCase() === newEmp.email.toLowerCase()));
+        if (exists) return prev;
+        return [newEmp, ...prev];
+      });
+    };
+
+    socket.on('user_registered', handleNewUser);
+    return () => {
+      socket.off('user_registered', handleNewUser);
+    };
   }, []);
 
   // Restore cached AI insights
@@ -311,6 +344,29 @@ export const AdminAnalyticsPage: React.FC = () => {
             Domains Below 70 Threshold
           </p>
         </div>
+      </div>
+
+      {/* QUICK LINK TO REGISTERED MEMBERS DIRECTORY */}
+      <div className="bg-gradient-to-r from-teal-900 to-slate-900 text-white rounded-2xl p-5 border border-teal-800/60 shadow-md flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-teal-400" />
+            <h2 className="text-base font-black text-white">Registered Members & User Directory</h2>
+            <span className="text-[10px] font-black uppercase tracking-wider bg-teal-500/20 text-teal-300 border border-teal-500/40 px-2.5 py-0.5 rounded-full">
+              LIVE SYNC
+            </span>
+          </div>
+          <p className="text-xs text-slate-300">
+            View all authenticated institutional learners, verified mentors, and administrative accounts. New registrations update in real time.
+          </p>
+        </div>
+        <a
+          href="#/admin/members"
+          className="px-5 py-2.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-slate-950 font-black text-xs inline-flex items-center gap-2 shadow-lg transition-transform hover:scale-105 shrink-0"
+        >
+          <span>Open Member Directory</span>
+          <ArrowRight className="w-4 h-4" />
+        </a>
       </div>
 
       {/* AI INSIGHTS REPORT BANNER IF GENERATED */}
