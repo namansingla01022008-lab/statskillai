@@ -21,7 +21,7 @@ ALTER TABLE "Course" ALTER COLUMN "level" SET DEFAULT 'Intermediate';
 ALTER TABLE "Course" ALTER COLUMN "portalUrl" SET DEFAULT '';
 
 -- Create unique index and topic/status indices for Course
-CREATE UNIQUE INDEX IF NOT EXISTS "Course_sourceUrl_key" ON "Course"("sourceUrl");
+CREATE INDEX IF NOT EXISTS "Course_sourceUrl_idx" ON "Course"("sourceUrl");
 CREATE INDEX IF NOT EXISTS "Course_status_idx" ON "Course"("status");
 CREATE INDEX IF NOT EXISTS "Course_topic_idx" ON "Course"("topic");
 

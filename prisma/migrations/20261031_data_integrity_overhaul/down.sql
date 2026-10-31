@@ -7,6 +7,7 @@ DROP TABLE IF EXISTS "Career";
 DROP INDEX IF EXISTS "Course_topic_idx";
 DROP INDEX IF EXISTS "Course_status_idx";
 DROP INDEX IF EXISTS "Course_sourceUrl_key";
+DROP INDEX IF EXISTS "Course_sourceUrl_idx";
 
 ALTER TABLE "Course"
   DROP COLUMN IF EXISTS "lastVerifiedAt",
