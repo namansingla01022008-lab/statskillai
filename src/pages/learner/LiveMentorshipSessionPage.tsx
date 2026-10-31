@@ -601,16 +601,25 @@ void inorderTraversal(TreeNode* root) {
       });
 
       await refreshScores();
-      setCompletedFeedback(feedback);
-      setShowFeedbackModal(true);
+      if (isMentor) {
+        // Mentor just ends the call and goes back to their dashboard
+        navigate('/mentor-dashboard');
+      } else {
+        setCompletedFeedback(feedback);
+        setShowFeedbackModal(true);
+      }
     } catch (err) {
       console.error('Failed to end call:', err);
-      const fb = StorageService.getSessionFeedback(session.sessionId);
-      if (fb) {
-        setCompletedFeedback(fb);
-        setShowFeedbackModal(true);
+      if (isMentor) {
+        navigate('/mentor-dashboard');
       } else {
-        navigate(isMentor ? '/mentor-dashboard' : '/mentorship');
+        const fb = StorageService.getSessionFeedback(session.sessionId);
+        if (fb) {
+          setCompletedFeedback(fb);
+          setShowFeedbackModal(true);
+        } else {
+          navigate('/mentorship');
+        }
       }
     }
   };
@@ -1013,8 +1022,8 @@ void inorderTraversal(TreeNode* root) {
         </div>
       </div>
 
-      {/* MENTOR FEEDBACK & SKILL GROWTH MODAL */}
-      {showFeedbackModal && completedFeedback && (
+      {/* MENTOR FEEDBACK & SKILL GROWTH MODAL — shown only to the learner/student */}
+      {!isMentor && showFeedbackModal && completedFeedback && (
         <MentorFeedbackModal
           session={session}
           feedback={completedFeedback}
