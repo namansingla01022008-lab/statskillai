@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../db';
 import { authenticate, requireRole, AuthenticatedRequest, requireOwnership } from '../middleware/auth';
-import { emitDirectMessage, notifyUser } from '../socket';
+import { emitDirectMessage, notifyUser, getIO } from '../socket';
 
 const router = Router();
 
@@ -109,7 +109,9 @@ router.post('/request', authenticate, requireRole(['learner']), async (req: Auth
       return res.status(400).json({ error: 'mentorId and goalMessage are required.' });
     }
 
-    const mentor = await prisma.mentor.findUnique({ where: { id: mentorId } });
+    const mentor = await prisma.mentor.findFirst({
+      where: { OR: [{ id: mentorId }, { userId: mentorId }] },
+    });
     if (!mentor) {
       return res.status(404).json({ error: 'Mentor not found.' });
     }
@@ -351,18 +353,37 @@ router.post('/book-session', authenticate, async (req: AuthenticatedRequest, res
       type: 'SESSION_BOOKED',
       title: 'Mentorship Session Booked!',
       message: `Your live session on "${topic}" with ${mentorName} is confirmed for ${date} at ${timeSlot}. Meeting ID: ${meetingId}`,
-      data: { sessionId, meetingId },
+      data: { sessionId, meetingId, booking },
     });
 
     // Real-time notification to mentor
-    const mentor = await prisma.mentor.findUnique({ where: { id: mentorId } });
+    const mentor = await prisma.mentor.findFirst({
+      where: {
+        OR: [
+          { id: mentorId },
+          { userId: mentorId },
+          { name: { equals: mentorName, mode: 'insensitive' } },
+        ],
+      },
+    });
+
+    const mentorNotif = {
+      type: 'NEW_SESSION_BOOKING',
+      title: 'New Live Session Booked',
+      message: `${req.user!.name} booked a session on "${topic}" for ${date} at ${timeSlot}.`,
+      data: { sessionId, meetingId, booking },
+      booking,
+    };
+
     if (mentor) {
-      notifyUser(mentor.userId, {
-        type: 'NEW_SESSION_BOOKING',
-        title: 'New Live Session Booked',
-        message: `${req.user!.name} booked a session on "${topic}" for ${date} at ${timeSlot}.`,
-        data: { sessionId, meetingId },
-      });
+      notifyUser(mentor.userId, mentorNotif);
+    }
+    notifyUser(mentorId, mentorNotif);
+
+    // Broadcast globally so any active mentor dashboard updates instantly
+    const io = getIO();
+    if (io) {
+      io.emit('mentor_session_booked', { booking, mentorId, mentorName });
     }
 
     res.status(201).json({ success: true, booking });
@@ -533,10 +554,30 @@ router.get('/my-sessions', authenticate, async (req: AuthenticatedRequest, res: 
 
     let bookings;
     if (role === 'mentor') {
-      const mentor = await prisma.mentor.findUnique({ where: { userId } });
-      const mentorId = mentor ? mentor.id : userId;
+      const mentor = await prisma.mentor.findFirst({
+        where: {
+          OR: [
+            { userId },
+            { id: userId },
+            { name: { equals: req.user!.name, mode: 'insensitive' } },
+          ],
+        },
+      });
+
+      const possibleMentorIds = [userId];
+      if (mentor) {
+        possibleMentorIds.push(mentor.id);
+        possibleMentorIds.push(mentor.userId);
+      }
+
       bookings = await prisma.mentorshipSessionBooking.findMany({
-        where: { OR: [{ mentorId }, { mentorName: req.user!.name }] },
+        where: {
+          OR: [
+            { mentorId: { in: possibleMentorIds } },
+            { mentorName: { equals: req.user!.name, mode: 'insensitive' } },
+            { mentorName: { contains: req.user!.name, mode: 'insensitive' } },
+          ],
+        },
         include: { feedback: true },
         orderBy: { createdAt: 'desc' },
       });

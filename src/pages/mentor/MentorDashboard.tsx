@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useApp } from '../../context/AppContext';
+import { ApiService } from '../../services/apiService';
 import { StorageService } from '../../services/storageService';
 import { useNetworkStatus } from '../../hooks/useNetworkStatus';
 import { Mentorship, MentorshipSessionBooking, MentorAvailabilitySlot } from '../../types';
@@ -16,6 +17,8 @@ import {
   Trash2,
   Video,
   ShieldCheck,
+  RefreshCw,
+  Radio,
 } from 'lucide-react';
 import { NoticeBanner } from '../../components/common/NoticeBanner';
 
@@ -29,10 +32,12 @@ export const MentorDashboard: React.FC = () => {
     (m) => m.userId === currentUser.id || m.name.toLowerCase() === currentUser.name.toLowerCase()
   ) || mentors[0]; // fallback to primary mentor if logged in as generic mentor
 
-  // Mentorship Bookings
+  // Mentorship Bookings State
   const [sessionBookings, setSessionBookings] = useState<MentorshipSessionBooking[]>(() =>
     StorageService.getMentorSessionBookings(myMentorProfile.id)
   );
+
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
   // Async Requests
   const [mentorships, setMentorships] = useState<Mentorship[]>(() =>
@@ -57,6 +62,77 @@ export const MentorDashboard: React.FC = () => {
   const [newTime, setNewTime] = useState<string>('10:00 AM');
 
   const [notice, setNotice] = useState<string | null>(null);
+
+  // 1. Fetch Remote Sessions Function
+  const refreshSessions = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const remoteBookings = await ApiService.getMySessionBookings(currentUser.id);
+      if (remoteBookings && Array.isArray(remoteBookings) && remoteBookings.length > 0) {
+        setSessionBookings(remoteBookings);
+        remoteBookings.forEach((b) => StorageService.saveSessionBooking(b));
+      } else {
+        const local = StorageService.getMentorSessionBookings(myMentorProfile.id);
+        if (local.length > 0) {
+          setSessionBookings(local);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to fetch remote sessions:', err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [currentUser.id, myMentorProfile.id]);
+
+  // Initial load on mount
+  useEffect(() => {
+    refreshSessions();
+  }, [refreshSessions]);
+
+  // 2. Real-Time Socket Listener for Instant Live Updates
+  useEffect(() => {
+    const socket = ApiService.getSocket();
+
+    const handleNewBooking = (payload: any) => {
+      const booking: MentorshipSessionBooking | undefined =
+        payload?.booking || payload?.data?.booking || (payload?.id ? payload : undefined);
+
+      if (!booking || !booking.id) return;
+
+      const isForMe =
+        booking.mentorId === myMentorProfile.id ||
+        booking.mentorId === currentUser.id ||
+        booking.mentorName?.toLowerCase().includes(currentUser.name.toLowerCase()) ||
+        currentUser.name.toLowerCase().includes(booking.mentorName?.toLowerCase() || '') ||
+        currentUser.role === 'mentor';
+
+      if (isForMe) {
+        setSessionBookings((prev) => {
+          const exists = prev.some((b) => b.id === booking.id || b.sessionId === booking.sessionId);
+          if (exists) {
+            return prev.map((b) => (b.id === booking.id || b.sessionId === booking.sessionId ? booking : b));
+          }
+          return [booking, ...prev];
+        });
+        StorageService.saveSessionBooking(booking);
+        setNotice(
+          `🔴 New Live Session Booked! ${booking.studentName} scheduled "${booking.topic}" for ${booking.date} at ${booking.timeSlot}.`
+        );
+      }
+    };
+
+    socket.on('mentor_session_booked', handleNewBooking);
+    socket.on('user_notification', (notif: any) => {
+      if (notif.type === 'NEW_SESSION_BOOKING') {
+        handleNewBooking(notif);
+      }
+    });
+
+    return () => {
+      socket.off('mentor_session_booked', handleNewBooking);
+      socket.off('user_notification', handleNewBooking);
+    };
+  }, [currentUser, myMentorProfile]);
 
   // Metrics
   const totalSessionsCompleted = myMentorProfile.totalSessions || 127;
@@ -144,7 +220,7 @@ export const MentorDashboard: React.FC = () => {
       </div>
 
       {notice && (
-        <NoticeBanner type="success" title="Action Completed">
+        <NoticeBanner type="success" title="Real-Time Update">
           {notice}
         </NoticeBanner>
       )}
@@ -200,7 +276,7 @@ export const MentorDashboard: React.FC = () => {
 
       {/* UPCOMING LIVE SESSIONS SECTION */}
       <div className="bg-white rounded-2xl p-5 sm:p-6 border border-slate-200 shadow-xs space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-3 gap-2">
           <div>
             <h2 className="text-base font-black text-slate-900 flex items-center gap-2">
               <Video className="w-5 h-5 text-teal-700" />
@@ -210,11 +286,28 @@ export const MentorDashboard: React.FC = () => {
               Students scheduled for 5-minute live one-to-one mentorship calls
             </p>
           </div>
+
+          {/* Real-Time Sync Indicator & Refresh Action */}
+          <div className="flex items-center gap-2 self-start sm:self-center">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+              Live Sync Active
+            </span>
+            <button
+              onClick={() => refreshSessions()}
+              disabled={isRefreshing}
+              className="px-2.5 py-1 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-semibold flex items-center gap-1 transition-colors"
+              title="Refresh sessions from database"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-teal-700 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+          </div>
         </div>
 
         {sessionBookings.filter((b) => b.sessionStatus === 'Upcoming' || b.sessionStatus === 'Live').length === 0 ? (
           <div className="p-8 text-center text-slate-400 text-xs italic">
-            No upcoming sessions booked currently. Students will appear here upon reserving open slots.
+            No upcoming sessions booked currently. When a student reserves a slot, it will appear here instantly.
           </div>
         ) : (
           <div className="space-y-3">

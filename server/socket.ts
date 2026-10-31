@@ -117,6 +117,11 @@ export function initSocketIO(httpServer: HttpServer): SocketIOServer {
       socket.to(room).emit('live_session_code', { code, senderName });
     });
 
+    // Live session booking real-time relay
+    socket.on('mentor_session_booked', (data: any) => {
+      io?.emit('mentor_session_booked', data);
+    });
+
     // Leave live session
     socket.on('leave_live_session', ({ sessionId }: { sessionId: string }) => {
       const room = `room:live_session:${sessionId}`;

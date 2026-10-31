@@ -390,6 +390,10 @@ export const ApiService = {
       );
       if (data?.booking) {
         StorageService.saveSessionBooking(data.booking);
+        try {
+          const socket = this.getSocket();
+          socket.emit('mentor_session_booked', { booking: data.booking });
+        } catch {}
         return data.booking;
       }
     } catch (err) {
@@ -418,6 +422,10 @@ export const ApiService = {
       createdAt: new Date().toISOString(),
     };
     StorageService.saveSessionBooking(localBooking);
+    try {
+      const socket = this.getSocket();
+      socket.emit('mentor_session_booked', { booking: localBooking });
+    } catch {}
     return localBooking;
   },
 
